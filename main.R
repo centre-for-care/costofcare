@@ -17,16 +17,15 @@ isc_sample[[2]] %>% filter(treated == 1)
 n_distinct(isc_sample[[2]]$pidp)
 
 
-# initialise the output list of the function where you will store the isc results
-synth_w_df = list()
-# initialise a list to save the original mscmt output
-synth_obj_save = list()
-#
-
 # lenght of the loop, depends on the number of treated cases #
 l = length(isc_sample)
 
-run <- function(r=10){
+run <- function(r=50){
+    # initialise the output list of the function where you will store the isc results
+    synth_w_df = list()
+    # initialise a list to save the original mscmt output
+    synth_obj_save = list()
+    #
     for(i in 1:2){
 
         tryCatch({ # try catching error, to avoid the loop to stop #
@@ -39,7 +38,7 @@ run <- function(r=10){
             
             u = unique(pdf_prep$timing_new2[pdf_prep$treatment_period == 0 & pdf_prep$treated == 1] )
 
-            table(pdf_prep$timing_new2, pdf_prep$timing_new)
+            #table(pdf_prep$timing_new2, pdf_prep$timing_new)
 
             p_id = unique(pdf_prep$pidp[pdf_prep$treated == 1] )
 
@@ -52,9 +51,11 @@ run <- function(r=10){
             control_id = unique(control_id)
 
             k_controls = length(control_id)
-            print(k_controls)
+            #print(k_controls)
 
-            g = lapply(1:r, function(p) fsample_person_period(pdf_prep, k_controls = k_controls)  )
+            g = lapply(1:r, function(p) fsample_person_period(pdf_prep,
+                                                              pid_treated_df = pid_treated_df,
+                                                              k_controls = k_controls)  )
                                         # we end up with a lists of bootstraped samples (g) #
 
             pdf_mscmt = lapply(1:r, function(i) g[[i]] [,c('pid_char',
@@ -64,7 +65,7 @@ run <- function(r=10){
                                                            'age_left_school',
                                                            'age')] )
 
-            length(pdf_mscmt)
+            #length(pdf_mscmt)
 
             ms_df <- mclapply(1:r, function(i)
                 listFromLong(pdf_mscmt[[i]], unit.variable="pid_sampled",
@@ -87,9 +88,9 @@ run <- function(r=10){
                       controls.identifier = as.character(2:(k_controls+1)),
                       times.dep = times.depms, times.pred = times.predms, seed=1) )
 
-            plot(res[[1]], type = 'comparison')
+            #plot(res[[1]], type = 'comparison')
 
-            table(pdf_prep$timing_new2, pdf_prep$timing_new)
+            #table(pdf_prep$timing_new2, pdf_prep$timing_new)
 
             synth_obj_save[[i]] = res
 
@@ -116,7 +117,7 @@ run <- function(r=10){
 
             all_synth_w_full =  lapply(1:r, function(i) merge(treated_avrFULL, controls_avrFULL[[i]], by = c('timing_new')) )
 
-            all_synth_w_full
+            #all_synth_w_full
 
             all_synth_w_full = rbindlist(all_synth_w_full, idcol = 'boot')
             setDT(all_synth_w_full)
@@ -133,9 +134,10 @@ run <- function(r=10){
             synth_w_df[[i]] = all_synth_w_full
         }, error=function(e){cat("treated id :",i, "error")} )
     }
+    return(synth_w_df)
 }
 
-run(r=5)
+synth_w_df <- run(r=50)
 
 
 #

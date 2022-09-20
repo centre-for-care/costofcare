@@ -5,7 +5,7 @@ library(tidyverse)
 library(data.table)
 
 
-fsample_person_period = function(pdf_prep, k_controls){
+fsample_person_period = function(pdf_prep, pid_treated_df, k_controls){
 
   # We sample only control cases #
   # We use the function "sample_n" with replacement #
@@ -26,8 +26,6 @@ fsample_person_period = function(pdf_prep, k_controls){
   df_treat_sampled = suppressMessages(left_join(samp, pdf_prep))
   #
   df_treat_sampled$pid_char = as.character(df_treat_sampled$pid_sampled)
-  #
-  df_treat_sampled
   #
   return(df_treat_sampled)
 }
