@@ -143,3 +143,4 @@ lib64
 pyvenv.cfg
 *~
 share/
+isc_sample
