@@ -4,6 +4,7 @@ library(parallel)
 library(tidyverse)
 library(data.table)
 
+set.seed(42) # setting global initial state for reproducibility
 
 fsample_person_period = function(pdf_prep, pid_treated_df, k_controls){
 

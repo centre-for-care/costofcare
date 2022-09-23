@@ -4,9 +4,9 @@ library(parallel)
 library(tidyverse)
 library(data.table)
 
-source('./funcs.R')
+source('./replication_attempt/funcs.R')
 
-load('./isc_sample')
+load('./replication_attempt/data/isc_sample')
 
 # The treated case in list 1 is
 isc_sample[[1]] %>% filter(treated == 1)
@@ -152,6 +152,7 @@ synth_w_df[[1]] %>% group_by(pidp, timing_new) %>%
   ggplot() +
   geom_line(aes(timing_new, earnings, colour = 'observed')) +
   geom_line(aes(timing_new, synthetic, colour = 'synthetic'))
+ggsave('./replication_attempt/figure_1.png')
 #
 
 #
@@ -160,6 +161,7 @@ synth_w_df[[2]] %>% group_by(pidp, timing_new) %>%
   ggplot() +
   geom_line(aes(timing_new, earnings, colour = 'observed')) +
   geom_line(aes(timing_new, synthetic, colour = 'synthetic'))
+ggsave('./replication_attempt/figure_2.png')
 #
 
 ####################################################################################
