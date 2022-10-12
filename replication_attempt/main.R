@@ -27,8 +27,7 @@ run <- function(r=50){
     synth_obj_save = list()
     #
     for(i in 1:2){
-
-        tryCatch({ # try catching error, to avoid the loop to stop #
+                                        # try catching error, to avoid the loop to stop #
             print(i)
 
                                         # select case i #
@@ -129,11 +128,8 @@ run <- function(r=50){
                 mutate(diff = round(earnings - earnings_synth)) # the difference is the average individual causal effect #
 
             all_synth_w_full = all_synth_w_full %>% select(boot, pidp, age, timing_new, post_treatment_period, everything())
-
-                                        # save #
             synth_w_df[[i]] = all_synth_w_full
-        }, error=function(e){cat("treated id :",i, "error")} )
-    }
+        }
     return(synth_w_df)
 }
 
