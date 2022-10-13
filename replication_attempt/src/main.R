@@ -3,11 +3,10 @@ library(MSCMT)
 library(parallel)
 library(tidyverse)
 library(data.table)
-library(here)
 
+source('./replication_attempt/src/funcs.R')
 
-source(here("costofcare", "replication_attempt", "src", "funcs.R"))
-load(here("costofcare", "replication_attempt","data", "isc_sample"))
+load('./replication_attempt/data/isc_sample')
 
 # The treated case in list 1 is
 isc_sample[[1]] %>% filter(treated == 1)
@@ -28,7 +27,8 @@ run <- function(r=50){
     synth_obj_save = list()
     #
     for(i in 1:2){
-                                        # try catching error, to avoid the loop to stop #
+
+        tryCatch({ # try catching error, to avoid the loop to stop #
             print(i)
 
                                         # select case i #
@@ -129,8 +129,11 @@ run <- function(r=50){
                 mutate(diff = round(earnings - earnings_synth)) # the difference is the average individual causal effect #
 
             all_synth_w_full = all_synth_w_full %>% select(boot, pidp, age, timing_new, post_treatment_period, everything())
+
+                                        # save #
             synth_w_df[[i]] = all_synth_w_full
-        }
+        }, error=function(e){cat("treated id :",i, "error")} )
+    }
     return(synth_w_df)
 }
 
@@ -149,7 +152,7 @@ synth_w_df[[1]] %>% group_by(pidp, timing_new) %>%
   ggplot() +
   geom_line(aes(timing_new, earnings, colour = 'observed')) +
   geom_line(aes(timing_new, synthetic, colour = 'synthetic'))
-ggsave(here("costofcare", "replication_attempt", "figures", "figure_1.png"))
+ggsave('./replication_attempt/figures/figure_1.png')
 #
 
 #
@@ -158,7 +161,7 @@ synth_w_df[[2]] %>% group_by(pidp, timing_new) %>%
   ggplot() +
   geom_line(aes(timing_new, earnings, colour = 'observed')) +
   geom_line(aes(timing_new, synthetic, colour = 'synthetic'))
-ggsave(here("costofcare", "replication_attempt", "figures", "figure_2.png"))
+ggsave('./replication_attempt/figures/figure_2.png')
 #
 
 ####################################################################################
