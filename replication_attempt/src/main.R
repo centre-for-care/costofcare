@@ -3,10 +3,11 @@ library(MSCMT)
 library(parallel)
 library(tidyverse)
 library(data.table)
+library(here)
 
-source('./replication_attempt/src/funcs.R')
+source(here("costofcare", "replication_attempt", "src", "funcs.R"))
 
-load('./replication_attempt/data/isc_sample')
+load(here("costofcare", "replication_attempt", "data", "isc_sample"))
 
 # The treated case in list 1 is
 isc_sample[[1]] %>% filter(treated == 1)
@@ -152,7 +153,7 @@ synth_w_df[[1]] %>% group_by(pidp, timing_new) %>%
   ggplot() +
   geom_line(aes(timing_new, earnings, colour = 'observed')) +
   geom_line(aes(timing_new, synthetic, colour = 'synthetic'))
-ggsave('./replication_attempt/figures/figure_1.png')
+ggsave(here("costofcare", "replication_attempt", "figures", "figure_1.png"))
 #
 
 #
@@ -161,7 +162,7 @@ synth_w_df[[2]] %>% group_by(pidp, timing_new) %>%
   ggplot() +
   geom_line(aes(timing_new, earnings, colour = 'observed')) +
   geom_line(aes(timing_new, synthetic, colour = 'synthetic'))
-ggsave('./replication_attempt/figures/figure_2.png')
+ggsave(here("costofcare", "replication_attempt", "figures", "figure_2.png"))
 #
 
 ####################################################################################
