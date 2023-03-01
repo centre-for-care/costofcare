@@ -138,9 +138,11 @@ dmypy.json
 
 #user defined
 *.csv
+data/
 bin/
 lib64
 pyvenv.cfg
 *~
 share/
+etc/
 isc_sample
