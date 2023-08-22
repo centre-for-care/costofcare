@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 
 def load_data(path_to_files: str, columns: list):
@@ -34,7 +35,7 @@ def create_index(x):
     """
     y = np.arange(len(x)) + 1
     return y - x
-
+642
 
 def recoding_and_cleaning(in_data, cpih_data):
     """
@@ -68,6 +69,32 @@ def recoding_and_cleaning(in_data, cpih_data):
          "nov yr2": 23,
          "dec yr2": 24,
          "Not available for IEMB": np.nan})
+    data['month_for_date'] = data.month.str.strip().replace(
+        {"jan yr1": 1,
+         "feb yr1": 2,
+         "mar yr1": 3,
+         "apr yr1": 4,
+         "may yr1": 5,
+         "jun yr1": 6,
+         "jul yr1": 7,
+         "aug yr1": 8,
+         "sep yr1": 9,
+         "oct yr1": 10,
+         "nov yr1": 11,
+         "dec yr1": 12,
+         "jan yr2": 1,
+         "feb yr2": 2,
+         "mar yr2": 3,
+         "apr yr2": 4,
+         "may yr2": 5,
+         "jun yr2": 6,
+         "jul yr2": 7,
+         "aug yr2": 8,
+         "sep yr2": 9,
+         "oct yr2": 10,
+         "nov yr2": 11,
+         "dec yr2": 12,
+         "Not available for IEMB": np.nan})
     data['year'] = np.repeat(np.nan, data.shape[0])
     data.loc[(data.month_recoded<=12)&(data.wave==1), 'year'] = int(2009)
     data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==1), 'year'] = int(2010)
@@ -93,6 +120,12 @@ def recoding_and_cleaning(in_data, cpih_data):
     data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==11), 'year'] = int(2020)
     data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==12), 'year'] = int(2020)
     data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==12), 'year'] = int(2021)
+    data['date'] = data['year'].astype(str).str.split('.').str[0] + '-' + data['month_for_date'].astype(str).str.split('.').str[0] + '-' + '1'
+    for index, row in data.iterrows():
+        try:
+            row['date'] = pd.to_datetime(row['date'], format='%Y-%m-%d')
+        except ValueError:
+            row['date'] = np.nan
     data['aidhh_recoded'] = data.aidhh.replace({'Yes': 'yes', # this variable encodes caring at home
                                                 'No': 'no',
                                                 'no     ': 'no',
