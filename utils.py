@@ -15,16 +15,31 @@ def load_data(path_to_files: str, columns: list):
     indresp = []
     prefixes = [] # for later
     for filename in all_files:
-        prefix = filename.split('/')[-1][0:2]
-        prefixes.append(prefix)
-        colnames = [f'{prefix}{x}' for x in columns]
-        temp_df = pd.read_stata(filename,
-                       columns=['pidp'] + colnames)
-        indresp.append(temp_df)
+        try:
+            prefix = filename.split('/')[-1][0:2]
+            prefixes.append(prefix)
+            colnames = [f'{prefix}{x}' for x in columns]
+            temp_df = pd.read_stata(filename,
+                           columns=['pidp'] + colnames)
+            indresp.append(temp_df)
+        except ValueError:
+            prefix = filename.split('/')[-1][0:2]
+            prefixes.append(prefix)
+            colnames = [f'{prefix}{x}' for x in columns]
+            all_cols = pd.read_stata(filename, convert_categoricals=False).columns
+            idx2 = pd.Series(colnames).isin(all_cols)
+            missing_cols = pd.Series(colnames)[~idx2].to_list()
+            present_cols = pd.Series(colnames)[idx2].to_list()
+            temp_df = pd.read_stata(filename,
+                           columns=['pidp'] + present_cols)
+            for col in missing_cols:
+                temp_df[col] = np.nan
+            indresp.append(temp_df[['pidp'] + colnames])
+            
     for i, df in enumerate(indresp):
         df['wave'] = i+1
-        df.columns = ['pidp'] + columns + ['wave'] # the order of the columns here is importan
-    out = pd.concat(indresp)
+        df.columns = ['pidp'] + columns + ['wave'] # the order of the columns here is important
+    out = pd.concat(indresp, ignore_index=True)
     out['max_waves'] = out.groupby('pidp')['wave'].transform('count').values
     return out
 
@@ -95,7 +110,7 @@ def recoding_and_cleaning(in_data, cpih_data):
          "nov yr2": 11,
          "dec yr2": 12,
          "Not available for IEMB": np.nan})
-    data['year'] = np.repeat(np.nan, data.shape[0])
+    data['year'] = np.nan
     data.loc[(data.month_recoded<=12)&(data.wave==1), 'year'] = int(2009)
     data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==1), 'year'] = int(2010)
     data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==2), 'year'] = int(2010)
@@ -120,6 +135,33 @@ def recoding_and_cleaning(in_data, cpih_data):
     data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==11), 'year'] = int(2020)
     data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==12), 'year'] = int(2020)
     data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==12), 'year'] = int(2021)
+    
+    data['weight_yearx'] = np.nan
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==1), 'weight_yearx'] = data.indinus_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==1), 'weight_yearx'] = data.indinus_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==2), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==2), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==3), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==3), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==4), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==4), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==5), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==5), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==6), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==6), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==7), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==7), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==8), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==8), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==9), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==9), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==10), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==10), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==11), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==11), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==12), 'weight_yearx'] = data.indinui_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==12), 'weight_yearx'] = data.indinui_lw
+    
     data['date'] = data['year'].astype(str).str.split('.').str[0] + '-' + data['month_for_date'].astype(str).str.split('.').str[0] + '-' + '1'
     for index, row in data.iterrows():
         try:
@@ -211,4 +253,65 @@ def recoding_and_cleaning(in_data, cpih_data):
     data['wage_h'] = data['wage'] / data['month_jbhrs']
     data['wage_h_deflated'] = (data['wage_h'] / data['cpih']) * 100
     data['log_wage_h_deflated'] = np.log(data['wage_h_deflated'])
+    data['dvage'] = data.dvage.replace({
+        'missing': np.nan,
+        "don't know": np.nan,
+        'refusal': np.nan,
+        'inapplicable': np.nan})
     return data
+
+
+def isc_data_preparation(data, conditions: dict):
+    out = data.copy()
+    employed = conditions['employed']
+    dropna = conditions['dropna']
+    target_var = conditions['target_var']
+    min_treat_waves = conditions['min_treat_waves']
+    min_waves_pretreat = conditions['min_waves_pretreat']
+    if employed: # dropping if ever unemployed
+        out['unemployed_bool'] = ~(out.employed == 'employed')
+        out_copy = out.copy()
+        to_drop = []
+        for pidp in out.pidp.unique():
+            temp_data = out[out.pidp==pidp].copy()
+            if temp_data['unemployed_bool'].any(): #check if any time was unemployed
+                to_drop.append(pidp) # adds to drop if above is true
+        out = out_copy[~out_copy.pidp.isin(to_drop)].copy()
+    if dropna: #dropping if ever missing in target var
+        out_copy = out.copy()
+        to_drop = []
+        for pidp in out.pidp.unique():
+            temp_data = out[out.pidp==pidp].copy()
+            if temp_data[target_var].isnull().any():
+                to_drop.append(pidp)
+        out = out_copy[~out_copy.pidp.isin(to_drop)].copy()
+    out['ever_treated'] = out.groupby('pidp')['treated'].transform(any).values
+    out['year_reindex'] = out.sort_values(by=['pidp', 'year']).groupby('pidp').cumcount() + 1
+    out.reset_index(drop=True, inplace=True)
+    out.sort_values(by=['pidp', 'year_reindex'], inplace=True)
+    out['year_treated'] = out.year[out.groupby('pidp')['treated'].transform('idxmax').values].values
+    out['year_treat_reindex'] = out.year_reindex[out.groupby('pidp')['treated'].transform('idxmax').values].values
+    out['initial_year'] = out.groupby('pidp')['year'].transform('min').values
+    out['reindex'] = out.groupby('pidp')['year_treat_reindex'].transform(create_index).values
+    out['years_treated'] = out.groupby('pidp')['treated'].transform('sum').values
+    treated = out[out.ever_treated].copy()
+    control = out[~out.ever_treated].copy()
+    control['ever_treated'] = control.groupby('pidp')['treated'].transform(any)
+    treated = treated[~(treated.years_treated < min_treat_waves)]
+    treated = treated.drop(treated[(treated.year_treat_reindex < min_waves_pretreat)].index)
+    return treated, control
+
+
+def get_control_clean(c_data, t_data):
+    samples = []
+    t_ids = t_data.pidp.unique().tolist()
+    for t_id in t_ids:
+        out = {}
+        treat_time = t_data[t_data.pidp == t_id].year_treated.unique()[0]
+        treat = t_data[t_data.pidp == t_id].pivot_table(index='year', columns='pidp', values='log_wage_h_deflated')
+        control = c_data.pivot_table(index='year', columns='pidp', values='log_wage_h_deflated')
+        sub_sample = pd.concat([treat, control], axis=1, join="inner") # concat-join-inner ensure using index (year) as key
+        out['data'] = sub_sample.dropna(axis=1) # only complete columns
+        out['treat_time'] = treat_time
+        samples.append(out)
+    return samples
