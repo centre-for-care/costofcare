@@ -58,6 +58,85 @@ def recoding_and_cleaning(in_data, cpih_data):
     Is in general a mess that runs once.
     """
     data = in_data.copy()
+    data['sex_recoded'] = data.sex.str.strip().replace({
+    'female': 0,
+    'male': 1,
+    "don't know": np.nan,
+    'missing': np.nan,
+    'refusal': np.nan})
+    data['mastat_recoded'] = data.mastat_dv.str.strip().replace({
+    'Married': 1,
+    'Living as couple': 1,
+    'In a registered same-sex civil partnership': 1,
+    'Single and never married/in civil partnership': 0,
+    'A former civil partner': 0,
+    'Divorced': 0,
+    'Separated but legally married': 0,
+    'Widowed': 0,
+    'Separated from civil partner': 0,
+    'A surviving civil partner': 0,
+    "don't know": np.nan,
+    'missing': np.nan,
+    'refusal': np.nan,
+    'inapplicable': np.nan,
+    'Child under 16': np.nan
+    })
+    data['ethn_8'] = data.ethn_dv.str.strip().replace({
+    'british/english/scottish/welsh/northern irish': 'uk-white',
+    'indian': 'indian',
+    'pakistani': 'pakistani',
+    'any other white background': 'white',
+    'african': 'black',
+    'bangladeshi': 'asian',
+    'caribbean': 'black',
+    'irish': 'white',
+    'any other asian background': 'asian',
+    'white and black caribbean': 'mixed',
+    'any other ethnic group': 'other',
+    'chinese': 'asian',
+    'any other mixed background': 'mixed',
+    'white and asian': 'mixed',
+    'arab': 'other',
+    'white and black african': 'mixed',
+    'any other black background': 'black',
+    'gypsy or irish traveller': 'white',
+    'missing': np.nan
+    })
+    data['ethn_5'] = data.ethn_8.str.strip().replace({
+    'uk-white': 'white',
+    'indian': 'asian',
+    'pakistani': 'asian'
+    })
+    data['edu'] = data.qfhigh_dv.str.strip().str.lower()
+    data['edu_6'] = data.edu.str.strip().replace({
+    'cse': 1,
+    'other school cert': 1,
+    'gcse/o level': 2,
+    'standard/o/lower': 2,
+    'a level': 3,
+    'as level': 3,
+    'highers (scot)': 3,
+    'cert 6th year studies': 3,
+    "i'nationl baccalaureate": 3,
+    'welsh baccalaureate': 3,
+    'diploma in he': 4,
+    'nursing/other med qual': 4,
+    'teaching qual not pgce': 4,
+    '1st degree or equivalent': 5,
+    'higher degree': 6,
+    'other higher degree': 6,
+    'none of the above': np.nan,
+    'missing': np.nan,
+    'inapplicable': np.nan,
+    })
+    data['edu_3'] = data.edu_6.replace({
+    1: 1,
+    2: 1,
+    3: 2,
+    4: 2,
+    5: 3,
+    6: 3
+    })
     data['month_recoded'] = data.month.str.strip().replace(
         {"jan yr1": 1,
          "feb yr1": 2,
