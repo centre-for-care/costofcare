@@ -138,6 +138,7 @@ dmypy.json
 
 #user defined
 *.csv
+*.zip
 data/
 bin/
 lib64
