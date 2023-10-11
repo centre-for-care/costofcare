@@ -4,6 +4,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+from typing import List
+from operator import add
+from toolz import reduce, partial
+from scipy.optimize import minimize
+from sklearn.neighbors import KDTree
+from multiprocessing import Pool
 
 
 def load_data(path_to_files: str, columns: list):
@@ -41,6 +47,43 @@ def load_data(path_to_files: str, columns: list):
         df.columns = ['pidp'] + columns + ['wave'] # the order of the columns here is important
     out = pd.concat(indresp, ignore_index=True)
     out['max_waves'] = out.groupby('pidp')['wave'].transform('count').values
+    return out
+
+
+def load_data_h(path_to_files: str, columns: list):
+    """
+    This script only load data files scattered by waves in the folders.
+    """
+    all_files = glob.glob(os.path.join(path_to_files,
+                                       '*hhresp.dta'))
+    indresp = []
+    prefixes = [] # for later
+    for filename in all_files:
+        try:
+            prefix = filename.split('/')[-1][0:2]
+            prefixes.append(prefix)
+            colnames = [f'{prefix}{x}' for x in columns]
+            temp_df = pd.read_stata(filename,
+                           columns=colnames, convert_categoricals=False)
+            indresp.append(temp_df)
+        except ValueError:
+            prefix = filename.split('/')[-1][0:2]
+            prefixes.append(prefix)
+            colnames = [f'{prefix}{x}' for x in columns]
+            all_cols = pd.read_stata(filename, convert_categoricals=False).columns
+            idx2 = pd.Series(colnames).isin(all_cols)
+            missing_cols = pd.Series(colnames)[~idx2].to_list()
+            present_cols = pd.Series(colnames)[idx2].to_list()
+            temp_df = pd.read_stata(filename,
+                           columns=present_cols)
+            for col in missing_cols:
+                temp_df[col] = np.nan
+            indresp.append(temp_df[colnames])
+            
+    for i, df in enumerate(indresp):
+        df['wave'] = i+1
+        df.columns = columns + ['wave'] # the order of the columns here is important
+    out = pd.concat(indresp, ignore_index=True)
     return out
 
 
@@ -216,10 +259,10 @@ def recoding_and_cleaning(in_data, cpih_data):
     data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==12), 'year'] = int(2021)
     
     data['weight_yearx'] = np.nan
-    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==1), 'weight_yearx'] = data.indinus_lw
-    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==1), 'weight_yearx'] = data.indinus_lw
-    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==2), 'weight_yearx'] = data.indinub_lw
-    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==2), 'weight_yearx'] = data.indinub_lw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==1), 'weight_yearx'] = data.indscus_xw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==1), 'weight_yearx'] = data.indscus_xw
+    data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==2), 'weight_yearx'] = data.indinus_lw
+    data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==2), 'weight_yearx'] = data.indinus_lw
     data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==3), 'weight_yearx'] = data.indinub_lw
     data.loc[(data.month_recoded>=13)&(data.month_recoded<=24)&(data.wave==3), 'weight_yearx'] = data.indinub_lw
     data.loc[(data.month_recoded>=1)&(data.month_recoded<=12)&(data.wave==4), 'weight_yearx'] = data.indinub_lw
@@ -330,8 +373,15 @@ def recoding_and_cleaning(in_data, cpih_data):
     data['month_jbhrs'] = data['jbhrs_clean'] * 4.33 # times the average amount of weeks
     data['wage_h'] = data['wage'] / data['month_jbhrs']
     data['wage_h'] = data['wage'] / data['month_jbhrs']
+    data['ind_inc'] = data.fimnlabgrs_dv.replace({"don't know": np.nan,
+                                              'missing': np.nan})
+    data['ind_inc_deflated'] = (data['ind_inc'] / data['cpih']) * 100
     data['wage_h_deflated'] = (data['wage_h'] / data['cpih']) * 100
+    data['hh_inc'] = data.fihhmngrs_dv.replace({-9: np.nan})
+    data['hh_inc_deflated'] = (data['hh_inc'] / data['cpih']) * 100
     data['log_wage_h_deflated'] = np.log(data['wage_h_deflated'])
+    data.loc[data.hh_inc_deflated < 0, 'hh_inc_deflated'] = np.nan
+    data.loc[data.ind_inc_deflated < 0, 'ind_inc_deflated'] = np.nan
     data['dvage'] = data.dvage.replace({
         'missing': np.nan,
         "don't know": np.nan,
@@ -381,16 +431,101 @@ def isc_data_preparation(data, conditions: dict):
     return treated, control
 
 
-def get_control_clean(c_data, t_data):
+def create_index(x):
+    y = np.arange(len(x)) + 1
+    return y - x
+
+def create_relative_index(lst, point):
+    index = lst.index(point)
+    return [i - index for i in range(len(lst))]
+
+def create_relative_MultiIndex(lst, point):
+    index = lst.index(point)
+    return [i - index for i in range(len(lst))]
+
+
+# the expression to minimise, since \mu is 0, we are one looking for \omega/W
+def argmin_w(W, Y_i, Y_0):
+    return np.sqrt(np.sum((Y_0 - Y_i.dot(W))**2))
+
+# a function wrapping the whole process
+def get_w(Y_i, Y_0):
+    w_start = [1/Y_i.shape[1]]*Y_i.shape[1]
+    weights = minimize(partial(argmin_w, Y_i=Y_i, Y_0=Y_0),
+                       np.array(w_start),
+                       method='SLSQP',
+                       constraints=({'type': 'eq', 'fun': lambda x: np.sum(x) - 1}), # constraint to sum to 1
+                       bounds=[(0.0, 1.0)]*len(w_start),
+                       )
+    return weights.x
+
+def is_consecutive(l):
+    return sorted(l) == list(range(min(l), max(l)+1))
+    idx = []
+    for pidp in treated.pidp:
+        idx.append(is_consecutive(treated[treated.pidp == pidp].wave))
+    
+def get_control_clean(c_data, t_data, features, target_var, weights=None):
     samples = []
     t_ids = t_data.pidp.unique().tolist()
     for t_id in t_ids:
+        if t_data[t_data.pidp == t_id].shape[0] < 5:
+            continue
         out = {}
         treat_time = t_data[t_data.pidp == t_id].year_treated.unique()[0]
-        treat = t_data[t_data.pidp == t_id].pivot_table(index='year', columns='pidp', values='log_wage_h_deflated')
-        control = c_data.pivot_table(index='year', columns='pidp', values='log_wage_h_deflated')
+        t_data = t_data.dropna(subset=['year']).copy()
+        treat = t_data[t_data.pidp == t_id].pivot(index='pidp', columns='year')[features].T
+        control = c_data.pivot(index='pidp', columns='year')[features].T
         sub_sample = pd.concat([treat, control], axis=1, join="inner") # concat-join-inner ensure using index (year) as key
         out['data'] = sub_sample.dropna(axis=1) # only complete columns
         out['treat_time'] = treat_time
+        out['target_var'] = target_var
+        out['weight'] = t_data[t_data.pidp == t_id][['year', weights]].set_index('year')
         samples.append(out)
     return samples
+
+def sc(x, k_n=500):
+    data = x['data'].copy()
+    ncol = data.shape[1] - 1
+    sample_weights = x['weight'].copy()
+    data.index.names = ['var', 'year']
+    t_time = x['treat_time']
+    target_var = x['target_var']
+    data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
+    sample_weights.index = sample_weights.index - t_time
+    data = data.sort_index(ascending=True).copy()
+    df_T0 = data.loc[pd.IndexSlice[:, :-1], :]
+    Y_0 = df_T0.iloc[:, 0].values
+    if ncol < k_n:
+        k_n = ncol
+    kdt = KDTree(df_T0.T, leaf_size=30, metric='euclidean')
+    idx = kdt.query(df_T0.T, k=k_n, return_distance=False)[0, 1:]
+    Y_i = df_T0.iloc[:, idx].values
+    weights = get_w(Y_i, Y_0)
+    synth = data.iloc[:, idx].dot(weights).loc[target_var] # synthetic control is now based on the new subset of observations
+    treated = data.iloc[:, 0].loc[target_var]
+    diff = treated - synth
+    weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
+    return {
+        'synth': synth,
+        'treated': treated,
+        'diff': diff,
+        'weighted_diff': weighted_diff
+         }
+
+def isc(data_objects: list) -> dict:
+    synths = []
+    treats = []
+    diffs = []
+    weighted_diffs = []
+    with Pool() as p:
+        out = p.map(sc, data_objects)
+    for ele in out:
+        synths.append(ele['synth'])
+        treats.append(ele['treated'])
+        diffs.append(ele['diff'])
+        weighted_diffs.append(ele['weighted_diff'])
+    return {'synths': synths,
+            'treats': treats,
+            'diffs': diffs,
+            'weighted_diff': weighted_diffs}
