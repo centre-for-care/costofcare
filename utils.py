@@ -484,7 +484,7 @@ def get_control_clean(c_data, t_data, features, target_var, weights=None):
         samples.append(out)
     return samples
 
-def sc(x, k_n=500):
+def sc(x, k_n):
     data = x['data'].copy()
     ncol = data.shape[1] - 1
     sample_weights = x['weight'].copy()
@@ -498,7 +498,10 @@ def sc(x, k_n=500):
     Y_0 = df_T0.iloc[:, 0].values
     if ncol < k_n:
         k_n = ncol
-    kdt = KDTree(df_T0.T, leaf_size=30, metric='euclidean')
+    try:
+        kdt = KDTree(df_T0.T, leaf_size=30, metric='euclidean')
+    except ValueError:
+        return None
     idx = kdt.query(df_T0.T, k=k_n, return_distance=False)[0, 1:]
     Y_i = df_T0.iloc[:, idx].values
     weights = get_w(Y_i, Y_0)
@@ -513,18 +516,22 @@ def sc(x, k_n=500):
         'weighted_diff': weighted_diff
          }
 
-def isc(data_objects: list) -> dict:
+def isc(data_objects: list, k_n: int=500) -> dict:
     synths = []
     treats = []
     diffs = []
     weighted_diffs = []
     with Pool() as p:
-        out = p.map(sc, data_objects)
+        out = p.starmap(sc, [(data, k_n) for data in data_objects])
+    
     for ele in out:
-        synths.append(ele['synth'])
-        treats.append(ele['treated'])
-        diffs.append(ele['diff'])
-        weighted_diffs.append(ele['weighted_diff'])
+        if ele is not None:
+            synths.append(ele['synth'])
+            treats.append(ele['treated'])
+            diffs.append(ele['diff'])
+            weighted_diffs.append(ele['weighted_diff'])
+        else:
+            continue
     return {'synths': synths,
             'treats': treats,
             'diffs': diffs,
