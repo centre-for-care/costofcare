@@ -87,13 +87,20 @@ def load_data_h(path_to_files: str, columns: list):
     return out
 
 
+def trimmer(x: pd.Series, lwb: float=0.0, upb: float=0.99):
+    s = x.copy()
+    lower_bound = s.quantile(lwb)
+    upper_bound = s.quantile(upb)
+    return s.apply(lambda x: x if lower_bound <= x <= upper_bound else np.nan)
+
+
 def create_index(x):
     """
     Create relative index based on length of array.
     """
     y = np.arange(len(x)) + 1
     return y - x
-642
+
 
 def recoding_and_cleaning(in_data, cpih_data):
     """
@@ -382,11 +389,18 @@ def recoding_and_cleaning(in_data, cpih_data):
     data['log_wage_h_deflated'] = np.log(data['wage_h_deflated'])
     data.loc[data.hh_inc_deflated < 0, 'hh_inc_deflated'] = np.nan
     data.loc[data.ind_inc_deflated < 0, 'ind_inc_deflated'] = np.nan
+
+    #trimming
+    data['hh_inc_deflated'] = trimmer(data['hh_inc_deflated'], )
+    data['ind_inc_deflated'] = trimmer(data['ind_inc_deflated'])
+    data['wage_h_deflated'] = trimmer(data['wage_h_deflated'])
+    data['log_wage_h_deflated'] = trimmer(data['log_wage_h_deflated'])
     data['dvage'] = data.dvage.replace({
         'missing': np.nan,
         "don't know": np.nan,
         'refusal': np.nan,
         'inapplicable': np.nan})
+    data['dvage'] = trimmer(data['dvage'])
     return data
 
 
