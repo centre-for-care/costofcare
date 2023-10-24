@@ -108,6 +108,8 @@ def recoding_and_cleaning(in_data, cpih_data):
     Is in general a mess that runs once.
     """
     data = in_data.copy()
+    data = data[~(data.pidp == 1020477375)] # Case with duplcates values
+    data = data[~(data.pidp == 1156430447)] # Case with duplicate values
     data['sex_recoded'] = data.sex.str.strip().replace({
     'female': 0,
     'male': 1,
@@ -508,6 +510,7 @@ def sc(x, k_n):
     data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
     sample_weights.index = sample_weights.index - t_time
     data = data.sort_index(ascending=True).copy()
+    data = data.loc[(slice(None), slice(-5, 5)), :].copy() # this limits to only -5 to 5 years
     df_T0 = data.loc[pd.IndexSlice[:, :-1], :]
     Y_0 = df_T0.iloc[:, 0].values
     if ncol < k_n:

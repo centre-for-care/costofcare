@@ -147,3 +147,4 @@ pyvenv.cfg
 share/
 etc/
 isc_sample
+*.pkl
