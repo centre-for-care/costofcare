@@ -495,6 +495,7 @@ def get_control_clean(c_data, t_data, features, target_var, weights=None):
         sub_sample = pd.concat([treat, control], axis=1, join="inner") # concat-join-inner ensure using index (year) as key
         out['data'] = sub_sample.dropna(axis=1) # only complete columns
         out['treat_time'] = treat_time
+        out['treat_id'] = t_id
         out['target_var'] = target_var
         out['weight'] = t_data[t_data.pidp == t_id][['year', weights]].set_index('year')
         samples.append(out)
