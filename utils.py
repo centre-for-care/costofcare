@@ -10,6 +10,10 @@ from toolz import reduce, partial
 from scipy.optimize import minimize
 from sklearn.neighbors import KDTree
 from multiprocessing import Pool
+from pysyncon import Dataprep, Synth
+import random
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 def load_data(path_to_files: str, columns: list):
@@ -403,6 +407,7 @@ def recoding_and_cleaning(in_data, cpih_data):
         'refusal': np.nan,
         'inapplicable': np.nan})
     data['dvage'] = trimmer(data['dvage'])
+    data['pidp'] = data['pidp'].astype(str)
     return data
 
 
@@ -541,6 +546,85 @@ def isc(data_objects: list, k_n: int=500) -> dict:
     weighted_diffs = []
     with Pool() as p:
         out = p.starmap(sc, [(data, k_n) for data in data_objects])
+    
+    for ele in out:
+        if ele is not None:
+            synths.append(ele['synth'])
+            treats.append(ele['treated'])
+            diffs.append(ele['diff'])
+            weighted_diffs.append(ele['weighted_diff'])
+        else:
+            continue
+    return {'synths': synths,
+            'treats': treats,
+            'diffs': diffs,
+            'weighted_diff': weighted_diffs}
+
+
+def sc_b(data_object, custom_V, reduction: bool=False):
+    data = data_object['data'].copy()
+    ncol = data.shape[1] - 1
+    sample_weights = data_object['weight'].copy()
+    data.index.names = ['var', 'year']
+    t_time = data_object['treat_time']
+    target_var = data_object['target_var']
+    treated_unit = data_object['treat_id']
+    data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
+    sample_weights.index = sample_weights.index - t_time
+    data = data.sort_index(ascending=True).copy()
+    data = data.loc[(slice(None), slice(-5, 5)), :].copy()
+    if reduction:
+        if ncol < k_n:
+            k_n = ncol
+        try:
+            df_T0 = data.loc[pd.IndexSlice[:, :-1], :]
+            kdt = KDTree(df_T0.T, leaf_size=30, metric='euclidean')
+            idx = kdt.query(df_T0.T, k=100, return_distance=False)[0, :]
+            data = data.iloc[:, idx]
+        except ValueError:
+            return None
+    melted_df = data.reset_index().melt(id_vars=['var', 'year'], var_name='pidp')
+    pivoted_df = melted_df.pivot(index=['year', 'pidp'], columns='var', values='value').reset_index()
+    pivoted_df =pivoted_df.sort_values(by=['pidp', 'year'])
+    pivoted_df = pivoted_df.reset_index(drop=True)
+    pivoted_df.columns.name = ''
+    controls = pivoted_df.pidp[pivoted_df.pidp!=treated_unit].unique()
+    covariates = pivoted_df.columns.to_list()
+    covariates.remove('year')
+    covariates.remove('pidp')
+    dataprep = Dataprep(
+        foo=pivoted_df,
+        predictors=covariates,
+        predictors_op="mean",
+        time_predictors_prior=range(-5, -1),
+        dependent=target_var,
+        unit_variable="pidp",
+        time_variable="year",
+        treatment_identifier=treated_unit,
+        controls_identifier=controls,
+        time_optimize_ssr=range(-5, -1),
+    )
+    synth = Synth()
+    synth.fit(dataprep=dataprep, custom_V=custom_V)
+    synth = data.drop(columns=treated_unit).dot(synth.W).loc[target_var] # synthetic control is now based on the new subset of observations
+    treated = data[treated_unit].loc[target_var]
+    diff = treated - synth
+    weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
+    return {
+        'synth': synth,
+        'treated': treated,
+        'diff': diff,
+        'weighted_diff': weighted_diff
+         }
+
+
+def isc_b(data_objects: list, custom_v: list, reduction: bool=False) -> dict:
+    synths = []
+    treats = []
+    diffs = []
+    weighted_diffs = []
+    with Pool() as p:
+        out = p.starmap(sc_b, [(data, custom_v) for data in data_objects])
     
     for ele in out:
         if ele is not None:
