@@ -1,66 +1,107 @@
 import pandas as pd
 from utils import get_control_clean
-from utils import isc
+from utils import isc_b
+import math
+import pickle
+
+
+def get_intertisial_data(clean_t, clean_c, target_var, out_suffix):
+    treated = pd.read_csv(clean_t, index_col=0)
+    controls = pd.read_csv(clean_c, index_col=0)
+    print(len(treated.pidp.unique()))
+    target_var = target_var
+    samples = get_control_clean(controls, treated,
+                                [target_var,
+                                'dvage',
+                                'mastat_recoded',
+                                'asian',
+                                'black',
+                                'mixed',
+                                'other',
+                                'low',
+                                'middle'],
+                                target_var,
+                                'weight_yearx')
+    with open(f'./outputs/{target_var}_{out_suffix}.pkl', 'wb') as file:
+        pickle.dump(samples, file)
+    return samples
+
+
+def run_isc(clean_t, clean_c, target_var, out_suffix, k_n=35):
+    samples = get_intertisial_data(clean_t, clean_c, target_var, out_suffix)
+    out = isc_b(samples, penalized=False, custom_v='auto', reduction=True, k_n=k_n)
+
+    diffs = pd.concat(out['diffs'], axis=1).sort_index()
+    w_diffs = pd.concat(out['weighted_diff'], axis=1).sort_index()
+    treats = pd.concat(out['treats'], axis=1).sort_index()
+    synths = pd.concat(out['synths'], axis=1).sort_index()
+    diffs.to_csv(f'./outputs/diffs_{target_var}_{out_suffix}.csv')
+    w_diffs.to_csv(f'./outputs/w_diffs_{target_var}_{out_suffix}.csv')
+    treats.to_csv(f'./outputs/treats_{target_var}_{out_suffix}.csv')
+    synths.to_csv(f'./outputs/synths_{target_var}_{out_suffix}.csv')
 
 
 def main():
-    treated = pd.read_csv('./data/is_t_full.csv', index_col=0)
-    controls = pd.read_csv('./data/is_c_full.csv', index_col=0)
-    controls = controls[~(controls.pidp == 1020477375)]
+    run_isc('./strata/ii_t_hi.csv', './strata/ii_c_full.csv', 'ind_inc_deflated', 'hi')
+    run_isc('./strata/ii_t_li.csv', './strata/ii_c_full.csv', 'ind_inc_deflated', 'li')
+
+    run_isc('./strata/hhi_t_hi.csv', './strata/hhi_c_full.csv', 'hh_inc_deflated', 'hi')
+    run_isc('./strata/hhi_t_li.csv', './strata/hhi_c_full.csv', 'hh_inc_deflated', 'li')
+
+    run_isc('./strata/is_t_hi.csv', './strata/is_c_full.csv', 'inc_share', 'hi')
+    run_isc('./strata/is_t_li.csv', './strata/is_c_full.csv', 'inc_share', 'li')
+
+    run_isc('./strata/pe_t_hi.csv', './strata/pe_c_full.csv', 'prob_emp', 'hi')
+    run_isc('./strata/pe_t_li.csv', './strata/pe_c_full.csv', 'prob_emp', 'li')
+
+    target_var = 'ind_inc_deflated'
+    prefix  = 'ii'
+
+    run_isc(f'./strata/{prefix}_t_hi_m.csv', f'./strata/{prefix}_c_m.csv', target_var, 'hi_m')
+    run_isc(f'./strata/{prefix}_t_hi_f.csv', f'./strata/{prefix}_c_f.csv', target_var, 'hi_f')
+
+    run_isc(f'./strata/{prefix}_t_hi_w.csv', f'./strata/{prefix}_c_w.csv', target_var, 'hi_w')
+    run_isc(f'./strata/{prefix}_t_hi_nw.csv', f'./strata/{prefix}_c_nw.csv', target_var, 'hi_nw')
+
+    run_isc(f'./strata/{prefix}_t_hi_edl.csv', f'./strata/{prefix}_c_edl.csv', target_var, 'hi_edl')
+    run_isc(f'./strata/{prefix}_t_hi_edm.csv', f'./strata/{prefix}_c_edm.csv', target_var, 'hi_edm')
+    run_isc(f'./strata/{prefix}_t_hi_edh.csv', f'./strata/{prefix}_c_edh.csv', target_var, 'hi_edh')
+
+    target_var = 'hh_inc_deflated'
+    prefix  = 'hhi'
+    run_isc(f'./strata/{prefix}_t_hi_m.csv', f'./strata/{prefix}_c_m.csv', target_var, 'hi_m')
+    run_isc(f'./strata/{prefix}_t_hi_f.csv', f'./strata/{prefix}_c_f.csv', target_var, 'hi_f')
+
+    run_isc(f'./strata/{prefix}_t_hi_w.csv', f'./strata/{prefix}_c_w.csv', target_var, 'hi_w')
+    run_isc(f'./strata/{prefix}_t_hi_nw.csv', f'./strata/{prefix}_c_nw.csv', target_var, 'hi_nw')
+
+    run_isc(f'./strata/{prefix}_t_hi_edl.csv', f'./strata/{prefix}_c_edl.csv', target_var, 'hi_edl')
+    run_isc(f'./strata/{prefix}_t_hi_edm.csv', f'./strata/{prefix}_c_edm.csv', target_var, 'hi_edm')
+    run_isc(f'./strata/{prefix}_t_hi_edh.csv', f'./strata/{prefix}_c_edh.csv', target_var, 'hi_edh')
+
     target_var = 'inc_share'
-    print('Data loaded...')
-    samples_fc = get_control_clean(controls, treated,
-                                [target_var,
-                                 'dvage',
-                                 'sex_recoded',
-                                 'mastat_recoded',
-                                 'asian',
-                                 'black',
-                                 'mixed',
-                                 'other',
-                                 'low',
-                                 'middle'],
-                                   target_var,
-                                 'weight_yearx')
-    samples_dc = get_control_clean(controls, treated, [target_var, 'dvage', 'sex_recoded', 'asian', 'black', 'mixed', 'other'], target_var, 'weight_yearx')
-    samples_nc = get_control_clean(controls, treated, [target_var], target_var, 'weight_yearx')
-    print('Data cleaned...')
-    out_nc = isc(samples_nc)
-    out_dc = isc(samples_dc)
-    out_fc = isc(samples_fc)
-    
-    diffs_nc = pd.concat(out_nc['diffs'], axis=1).sort_index()
-    w_diffs_nc = pd.concat(out_nc['weighted_diff'], axis=1).sort_index()
-    treats_nc = pd.concat(out_nc['treats'], axis=1).sort_index()
-    synths_nc = pd.concat(out_nc['synths'], axis=1).sort_index()
-    
-    diffs_dc = pd.concat(out_dc['diffs'], axis=1).sort_index()
-    w_diffs_dc = pd.concat(out_dc['weighted_diff'], axis=1).sort_index()
-    treats_dc = pd.concat(out_dc['treats'], axis=1).sort_index()
-    synths_dc = pd.concat(out_dc['synths'], axis=1).sort_index()
+    prefix  = 'is'
+    run_isc(f'./strata/{prefix}_t_hi_m.csv', f'./strata/{prefix}_c_m.csv', target_var, 'hi_m')
+    run_isc(f'./strata/{prefix}_t_hi_f.csv', f'./strata/{prefix}_c_f.csv', target_var, 'hi_f')
 
-    diffs_fc = pd.concat(out_fc['diffs'], axis=1).sort_index()
-    w_diffs_fc = pd.concat(out_fc['weighted_diff'], axis=1).sort_index()
-    treats_fc = pd.concat(out_fc['treats'], axis=1).sort_index()
-    synths_fc = pd.concat(out_fc['synths'], axis=1).sort_index()
+    run_isc(f'./strata/{prefix}_t_hi_w.csv', f'./strata/{prefix}_c_w.csv', target_var, 'hi_w')
+    run_isc(f'./strata/{prefix}_t_hi_nw.csv', f'./strata/{prefix}_c_nw.csv', target_var, 'hi_nw')
 
-    print('Synth controls created...')
-    diffs_nc.to_csv(f'diffs_nc_{target_var}.csv')
-    w_diffs_nc.to_csv(f'w_diffs_nc_{target_var}.csv')
-    treats_nc.to_csv(f'treats_nc_{target_var}.csv')
-    synths_nc.to_csv(f'synths_nc_{target_var}.csv')
-    
-    diffs_dc.to_csv(f'diffs_dc_{target_var}.csv')
-    w_diffs_dc.to_csv(f'w_diffs_dc_{target_var}.csv')
-    treats_dc.to_csv(f'treats_dc_{target_var}.csv')
-    synths_dc.to_csv(f'synths_dc_{target_var}.csv')
+    run_isc(f'./strata/{prefix}_t_hi_edl.csv', f'./strata/{prefix}_c_edl.csv', target_var, 'hi_edl')
+    run_isc(f'./strata/{prefix}_t_hi_edm.csv', f'./strata/{prefix}_c_edm.csv', target_var, 'hi_edm')
+    run_isc(f'./strata/{prefix}_t_hi_edh.csv', f'./strata/{prefix}_c_edh.csv', target_var, 'hi_edh')
 
-    diffs_fc.to_csv(f'diffs_fc_{target_var}.csv')
-    w_diffs_fc.to_csv(f'w_diffs_fc_{target_var}.csv')
-    treats_fc.to_csv(f'treats_fc_{target_var}.csv')
-    synths_fc.to_csv(f'synths_fc_{target_var}.csv')
+    target_var = 'prob_emp'
+    prefix  = 'pe'
+    run_isc(f'./strata/{prefix}_t_hi_m.csv', f'./strata/{prefix}_c_m.csv', target_var, 'hi_m')
+    run_isc(f'./strata/{prefix}_t_hi_f.csv', f'./strata/{prefix}_c_f.csv', target_var, 'hi_f')
 
-    print('Synth controls saved...')
+    run_isc(f'./strata/{prefix}_t_hi_w.csv', f'./strata/{prefix}_c_w.csv', target_var, 'hi_w')
+    run_isc(f'./strata/{prefix}_t_hi_nw.csv', f'./strata/{prefix}_c_nw.csv', target_var, 'hi_nw')
+
+    run_isc(f'./strata/{prefix}_t_hi_edl.csv', f'./strata/{prefix}_c_edl.csv', target_var, 'hi_edl')
+    run_isc(f'./strata/{prefix}_t_hi_edm.csv', f'./strata/{prefix}_c_edm.csv', target_var, 'hi_edm')
+    run_isc(f'./strata/{prefix}_t_hi_edh.csv', f'./strata/{prefix}_c_edh.csv', target_var, 'hi_edh')
 
 
 if __name__ == "__main__":

@@ -10,9 +10,10 @@ from toolz import reduce, partial
 from scipy.optimize import minimize
 from sklearn.neighbors import KDTree
 from multiprocessing import Pool
-from pysyncon import Dataprep, Synth
+from pysyncon import Dataprep, Synth, PenalizedSynth
 import random
 import warnings
+import tqdm 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 
@@ -112,7 +113,7 @@ def recoding_and_cleaning(in_data, cpih_data):
     Is in general a mess that runs once.
     """
     data = in_data.copy()
-    data = data[~(data.pidp == 1020477375)] # Case with duplcates values
+    data = data[~(data.pidp == 1020477375)] # Case with duplicate values
     data = data[~(data.pidp == 1156430447)] # Case with duplicate values
     data['sex_recoded'] = data.sex.str.strip().replace({
     'female': 0,
@@ -561,7 +562,7 @@ def isc(data_objects: list, k_n: int=500) -> dict:
             'weighted_diff': weighted_diffs}
 
 
-def sc_b(data_object, custom_V, reduction: bool=False):
+def sc_b(data_object, penalized: bool=False, custom_V=None, reduction: bool=False, k_n: int=500, lambda_: float=.01):
     data = data_object['data'].copy()
     ncol = data.shape[1] - 1
     sample_weights = data_object['weight'].copy()
@@ -572,14 +573,15 @@ def sc_b(data_object, custom_V, reduction: bool=False):
     data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
     sample_weights.index = sample_weights.index - t_time
     data = data.sort_index(ascending=True).copy()
-    data = data.loc[(slice(None), slice(-5, 5)), :].copy()
+    #data = data.loc[(slice(None), slice(-5, 5)), :].copy()
+    min_year = data.index.get_level_values('year').min().astype(int)
     if reduction:
         if ncol < k_n:
             k_n = ncol
         try:
             df_T0 = data.loc[pd.IndexSlice[:, :-1], :]
             kdt = KDTree(df_T0.T, leaf_size=30, metric='euclidean')
-            idx = kdt.query(df_T0.T, k=100, return_distance=False)[0, :]
+            idx = kdt.query(df_T0.T, k=k_n, return_distance=False)[0, :]
             data = data.iloc[:, idx]
         except ValueError:
             return None
@@ -592,39 +594,51 @@ def sc_b(data_object, custom_V, reduction: bool=False):
     covariates = pivoted_df.columns.to_list()
     covariates.remove('year')
     covariates.remove('pidp')
-    dataprep = Dataprep(
-        foo=pivoted_df,
-        predictors=covariates,
-        predictors_op="mean",
-        time_predictors_prior=range(-5, -1),
-        dependent=target_var,
-        unit_variable="pidp",
-        time_variable="year",
-        treatment_identifier=treated_unit,
-        controls_identifier=controls,
-        time_optimize_ssr=range(-5, -1),
-    )
-    synth = Synth()
-    synth.fit(dataprep=dataprep, custom_V=custom_V)
-    synth = data.drop(columns=treated_unit).dot(synth.W).loc[target_var] # synthetic control is now based on the new subset of observations
+    try:
+        dataprep = Dataprep(
+            foo=pivoted_df,
+            predictors=covariates,
+            predictors_op="mean",
+            time_predictors_prior=range(min_year, 0),
+            dependent=target_var,
+            unit_variable="pidp",
+            time_variable="year",
+            treatment_identifier=treated_unit,
+            controls_identifier=controls,
+            time_optimize_ssr=range(min_year, 0),
+        )
+    except ValueError:
+        return None
+    try:
+        if penalized:
+            synth = PenalizedSynth()
+            synth.fit(dataprep=dataprep, lambda_=lambda_)
+        else:
+            synth = Synth()
+            if custom_V == 'auto':
+                custom_V = round(1/pivoted_df.drop(columns=['year', 'pidp']).var(), 4).tolist()
+            synth.fit(dataprep=dataprep, custom_V=custom_V)
+    except KeyError:
+        return None
+    s_cntrl = data.drop(columns=treated_unit).dot(synth.W).loc[target_var] # synthetic control is now based on the new subset of observations
     treated = data[treated_unit].loc[target_var]
-    diff = treated - synth
+    diff = treated - s_cntrl
     weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
     return {
-        'synth': synth,
+        'synth': s_cntrl,
         'treated': treated,
         'diff': diff,
         'weighted_diff': weighted_diff
          }
 
 
-def isc_b(data_objects: list, custom_v: list, reduction: bool=False) -> dict:
+def isc_b(data_objects: list, penalized: bool=False, custom_v: list=None, reduction: bool=False, k_n: int=500, lambda_: float=.01) -> dict:
     synths = []
     treats = []
     diffs = []
     weighted_diffs = []
     with Pool() as p:
-        out = p.starmap(sc_b, [(data, custom_v) for data in data_objects])
+        out = p.starmap(sc_b, tqdm.tqdm([(data, penalized, custom_v, reduction, k_n, lambda_) for data in data_objects]))
     
     for ele in out:
         if ele is not None:
