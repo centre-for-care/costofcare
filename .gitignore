@@ -148,3 +148,7 @@ share/
 etc/
 isc_sample
 *.pkl
+
+local/*
+/.idea/costofcare.iml
+/.idea/inspectionProfiles/Project_Default.xml
