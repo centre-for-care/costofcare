@@ -355,6 +355,68 @@ def recoding_and_cleaning(in_data, cpih_data):
                                    "50 - 99 hours per week": "50+",
                                    "other": np.nan,
                                    "refusal": np.nan})
+    data['aidhrs_recoded_6'] = data.aidhrs.str.strip().replace({"inapplicable": np.nan, # this variable encodes hours caring in 3 categories (this might change in the future)
+                                   "0 - 4 hours per week": "0-4",
+                                   "proxy": np.nan,
+                                   "5 - 9 hours per week": "5-9",
+                                   "10 - 19 hours per week": "10-19",
+                                   "100 or more hours per week/continuous care": "50+",
+                                   "20 - 34 hours per week": "20-34",
+                                   "35 - 49 hours per week": "35-49",
+                                   "varies 20 hours or more": np.nan,
+                                   "0 - 4 hours per week": "0-4",
+                                   "10-19 hours per week": "10-19",
+                                   "Not available for IEMB": np.nan,
+                                   "Varies 20 hours or more": np.nan,
+                                   "varies under 20 hours": np.nan,
+                                   "Varies under 20 hours": np.nan,
+                                   "20-34 hours per week": "20-34",
+                                   "5 - 9 hours per week": "5-9",
+                                   "Other": np.nan,
+                                   "10 - 19 hours per week": "10-19",
+                                   "35-49 hours per week": "35-49",
+                                   "100 or more hours per week/continuous care": "50+",
+                                   "20 - 34 hours per week": "20-34",
+                                   "50-99 hours per week": "50+",
+                                   "other": np.nan,
+                                   "don't know": np.nan,
+                                   "35 - 49 hours per week": "35-49",
+                                   "varies under 20 hours": np.nan,
+                                   "Varies 20 hours or more": np.nan,
+                                   "50 - 99 hours per week": "50+",
+                                   "other": np.nan,
+                                   "refusal": np.nan})
+    data['aidhrs_recoded_4'] = data.aidhrs.str.strip().replace({"inapplicable": np.nan, # this variable encodes hours caring in 3 categories (this might change in the future)
+                                   "0 - 4 hours per week": "0-4",
+                                   "proxy": np.nan,
+                                   "5 - 9 hours per week": "5-19",
+                                   "10 - 19 hours per week": "5-19",
+                                   "100 or more hours per week/continuous care": "50+",
+                                   "20 - 34 hours per week": "20-49",
+                                   "35 - 49 hours per week": "20-49",
+                                   "varies 20 hours or more": np.nan,
+                                   "0 - 4 hours per week": "0-4",
+                                   "10-19 hours per week": "5-19",
+                                   "Not available for IEMB": np.nan,
+                                   "Varies 20 hours or more": np.nan,
+                                   "varies under 20 hours": np.nan,
+                                   "Varies under 20 hours": np.nan,
+                                   "20-34 hours per week": "20-49",
+                                   "5 - 9 hours per week": "5-19",
+                                   "Other": np.nan,
+                                   "10 - 19 hours per week": "5-19",
+                                   "35-49 hours per week": "20-49",
+                                   "100 or more hours per week/continuous care": "50+",
+                                   "20 - 34 hours per week": "20-49",
+                                   "50-99 hours per week": "50+",
+                                   "other": np.nan,
+                                   "don't know": np.nan,
+                                   "35 - 49 hours per week": "20-49",
+                                   "varies under 20 hours": np.nan,
+                                   "Varies 20 hours or more": np.nan,
+                                   "50 - 99 hours per week": "50+",
+                                   "other": np.nan,
+                                   "refusal": np.nan})
     data['jbstat_clean'] = data.jbstat.str.strip().str.lower()
     data['employed'] = data.jbstat_clean.replace({"paid employment(ft/pt)": "employed", # This variable encodes employed/unemployed status
                                                   "retired": "unemployed",
@@ -499,7 +561,7 @@ def get_control_clean(c_data, t_data, features, target_var, weights=None):
         treat = t_data[t_data.pidp == t_id].pivot(index='pidp', columns='year')[features].T
         control = c_data.pivot(index='pidp', columns='year')[features].T
         sub_sample = pd.concat([treat, control], axis=1, join="inner") # concat-join-inner ensure using index (year) as key
-        out['data'] = sub_sample.dropna(axis=1) # only complete columns
+        out['data'] = sub_sample.dropna(axis=1).astype(np.float64) # only complete columns
         out['treat_time'] = treat_time
         out['treat_id'] = t_id
         out['target_var'] = target_var
@@ -517,7 +579,7 @@ def sc(x, k_n):
     data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
     sample_weights.index = sample_weights.index - t_time
     data = data.sort_index(ascending=True).copy()
-    data = data.loc[(slice(None), slice(-5, 5)), :].copy() # this limits to only -5 to 5 years
+    #data = data.loc[(slice(None), slice(-5, 5)), :].copy() # this limits to only -5 to 5 years
     df_T0 = data.loc[pd.IndexSlice[:, :-1], :]
     Y_0 = df_T0.iloc[:, 0].values
     if ncol < k_n:
@@ -573,7 +635,6 @@ def sc_b(data_object, penalized: bool=False, custom_V=None, reduction: bool=Fals
     data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
     sample_weights.index = sample_weights.index - t_time
     data = data.sort_index(ascending=True).copy()
-    #data = data.loc[(slice(None), slice(-5, 5)), :].copy()
     min_year = data.index.get_level_values('year').min().astype(int)
     if reduction:
         if ncol < k_n:
@@ -623,8 +684,10 @@ def sc_b(data_object, penalized: bool=False, custom_V=None, reduction: bool=Fals
     s_cntrl = data.drop(columns=treated_unit).dot(synth.W).loc[target_var] # synthetic control is now based on the new subset of observations
     treated = data[treated_unit].loc[target_var]
     diff = treated - s_cntrl
+    #rmse = np.sqrt(np.mean(np.square(diff[:-1])))
     weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
     return {
+        #'rmse': rmse,
         'synth': s_cntrl,
         'treated': treated,
         'diff': diff,
