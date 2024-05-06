@@ -561,7 +561,7 @@ def get_control_clean(c_data, t_data, features, target_var, weights=None):
         treat = t_data[t_data.pidp == t_id].pivot(index='pidp', columns='year')[features].T
         control = c_data.pivot(index='pidp', columns='year')[features].T
         sub_sample = pd.concat([treat, control], axis=1, join="inner") # concat-join-inner ensure using index (year) as key
-        out['data'] = sub_sample.dropna(axis=1).astype(np.float64) # only complete columns
+        out['data'] = sub_sample.dropna(axis=1).astype(np.float64)  # only complete columns
         out['treat_time'] = treat_time
         out['treat_id'] = t_id
         out['target_var'] = target_var
@@ -569,7 +569,7 @@ def get_control_clean(c_data, t_data, features, target_var, weights=None):
         samples.append(out)
     return samples
 
-def sc(x, k_n):
+def sc(x, k_n, random=False):
     data = x['data'].copy()
     ncol = data.shape[1] - 1
     sample_weights = x['weight'].copy()
@@ -579,7 +579,7 @@ def sc(x, k_n):
     data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
     sample_weights.index = sample_weights.index - t_time
     data = data.sort_index(ascending=True).copy()
-    #data = data.loc[(slice(None), slice(-5, 5)), :].copy() # this limits to only -5 to 5 years
+    data = data.loc[(slice(None), slice(-8, 8)), :].copy() # this limits to only -5 to 5 years
     df_T0 = data.loc[pd.IndexSlice[:, :-1], :]
     Y_0 = df_T0.iloc[:, 0].values
     if ncol < k_n:
@@ -590,8 +590,14 @@ def sc(x, k_n):
         return None
     idx = kdt.query(df_T0.T, k=k_n, return_distance=False)[0, 1:]
     Y_i = df_T0.iloc[:, idx].values
-    weights = get_w(Y_i, Y_0)
-    synth = data.iloc[:, idx].dot(weights).loc[target_var] # synthetic control is now based on the new subset of observations
+    if random:
+        Y_i = df_T0.iloc[:, 1:].sample(n=k_n, axis='columns')
+        idx = Y_i.columns
+        weights = get_w(Y_i, Y_0)
+        synth = data.loc[:, idx].dot(weights).loc[target_var]
+    else:
+        weights = get_w(Y_i, Y_0)
+        synth = data.iloc[:, idx].dot(weights).loc[target_var] # synthetic control is now based on the new subset of observations
     treated = data.iloc[:, 0].loc[target_var]
     diff = treated - synth
     weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
@@ -602,13 +608,13 @@ def sc(x, k_n):
         'weighted_diff': weighted_diff
          }
 
-def isc(data_objects: list, k_n: int=500) -> dict:
+def isc(data_objects: list, k_n: int=500, random=False) -> dict:
     synths = []
     treats = []
     diffs = []
     weighted_diffs = []
     with Pool() as p:
-        out = p.starmap(sc, [(data, k_n) for data in data_objects])
+        out = p.starmap(sc, tqdm.tqdm([(data, k_n, random) for data in data_objects]))
     
     for ele in out:
         if ele is not None:
@@ -624,7 +630,7 @@ def isc(data_objects: list, k_n: int=500) -> dict:
             'weighted_diff': weighted_diffs}
 
 
-def sc_b(data_object, penalized: bool=False, custom_V=None, reduction: bool=False, k_n: int=500, lambda_: float=.01):
+def sc_b(data_object, penalized: bool=False, reduction: bool=False, k_n: int=500, lambda_: float=.01):
     data = data_object['data'].copy()
     ncol = data.shape[1] - 1
     sample_weights = data_object['weight'].copy()
@@ -635,6 +641,7 @@ def sc_b(data_object, penalized: bool=False, custom_V=None, reduction: bool=Fals
     data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
     sample_weights.index = sample_weights.index - t_time
     data = data.sort_index(ascending=True).copy()
+    data = data.loc[(slice(None), slice(-8, 8)), :].copy()
     min_year = data.index.get_level_values('year').min().astype(int)
     if reduction:
         if ncol < k_n:
@@ -649,7 +656,7 @@ def sc_b(data_object, penalized: bool=False, custom_V=None, reduction: bool=Fals
     melted_df = data.reset_index().melt(id_vars=['var', 'year'], var_name='pidp')
     pivoted_df = melted_df.pivot(index=['year', 'pidp'], columns='var', values='value').reset_index()
     pivoted_df =pivoted_df.sort_values(by=['pidp', 'year'])
-    pivoted_df = pivoted_df.reset_index(drop=True)
+    pivoted_df = pivoted_df.reset_index(drop=True) 
     pivoted_df.columns.name = ''
     controls = pivoted_df.pidp[pivoted_df.pidp!=treated_unit].unique()
     covariates = pivoted_df.columns.to_list()
@@ -676,42 +683,54 @@ def sc_b(data_object, penalized: bool=False, custom_V=None, reduction: bool=Fals
             synth.fit(dataprep=dataprep, lambda_=lambda_)
         else:
             synth = Synth()
-            if custom_V == 'auto':
-                custom_V = round(1/pivoted_df.drop(columns=['year', 'pidp']).var(), 4).tolist()
-            synth.fit(dataprep=dataprep, custom_V=custom_V)
+            synth.fit(dataprep=dataprep)
     except KeyError:
         return None
     s_cntrl = data.drop(columns=treated_unit).dot(synth.W).loc[target_var] # synthetic control is now based on the new subset of observations
     treated = data[treated_unit].loc[target_var]
     diff = treated - s_cntrl
-    #rmse = np.sqrt(np.mean(np.square(diff[:-1])))
+    rmse = np.sqrt(np.mean(np.square(diff[:-1])))
     weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
+    w_treated = sample_weights.multiply(treated, axis=0)['weight_yearx']
+    w_synth = sample_weights.multiply(s_cntrl, axis=0)['weight_yearx']
     return {
-        #'rmse': rmse,
+        'rmse': rmse,
         'synth': s_cntrl,
         'treated': treated,
         'diff': diff,
-        'weighted_diff': weighted_diff
+        'weighted_diff': weighted_diff,
+        'w_treated': w_treated,
+        'w_synth': w_synth
          }
 
 
-def isc_b(data_objects: list, penalized: bool=False, custom_v: list=None, reduction: bool=False, k_n: int=500, lambda_: float=.01) -> dict:
+def isc_b(data_objects: list, penalized: bool=False, reduction: bool=False, k_n: int=500, lambda_: float=.01) -> dict:
     synths = []
     treats = []
     diffs = []
     weighted_diffs = []
+    w_treated = []
+    w_synth = []
+    rmses = []
     with Pool() as p:
-        out = p.starmap(sc_b, tqdm.tqdm([(data, penalized, custom_v, reduction, k_n, lambda_) for data in data_objects]))
+        out = p.starmap(sc_b, tqdm.tqdm([(data, penalized, reduction, k_n, lambda_) for data in data_objects]))
     
     for ele in out:
         if ele is not None:
+            rmses.append(ele['rmse'])
             synths.append(ele['synth'])
             treats.append(ele['treated'])
             diffs.append(ele['diff'])
             weighted_diffs.append(ele['weighted_diff'])
+            w_treated.append(ele['w_treated'])
+            w_synth.append(ele['w_synth'])
         else:
             continue
-    return {'synths': synths,
+    return {'rmses': rmses,
+            'synths': synths,
             'treats': treats,
             'diffs': diffs,
-            'weighted_diff': weighted_diffs}
+            'weighted_diff': weighted_diffs,
+            'w_treated': w_treated,
+            'w_synth': w_synth}
+
