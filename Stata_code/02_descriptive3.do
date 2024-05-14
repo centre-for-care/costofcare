@@ -28,22 +28,6 @@ graph twoway  line  level1 level2 level3 level4 ctr_all dvage, ///
 tab reindex care_intensity_t if reindex>=-8 & reindex<=8 [aw=weight_yearx], col row
 tabout reindex care_intensity_t using table2.text if reindex>=-8 & reindex<=8 [aw=weight_yearx], c(freq) f(0c ) font(bold) replace
 
-
-la var ind_inc_deflated "Ind. Income"
-la var  hh_inc_deflated "Household Income"
-la var inc_share "Income share (%)"
-la var employed_d "Employed"
-la var dvage "Age"
-la var male "Male"
-la var married "Married"
-la var asian "Asian"
-la var black "Black"
-la var white "White"
-la var other_mixed "Mixed" 
-la var lower_education "Lower education"
-la var intermediate_education "Intermediate education"
-la var advanced_education "Advanced education"
-
 *Table 2 high vs low vs control - background characteristics
 global list0 ind_inc_deflated hh_inc_deflated inc_share employed_d dvage male married  asian black white other_mixed lower_education intermediate_education advanced_education 
 *global list1 ind_inc_deflated hh_inc_deflated inc_share employed_d dvage male married  asian black white other_mixed lower_education intermediate_education advanced_education higher_professional intermediate_occ large_employers lower_management lower_supervisory routine semi_routine
