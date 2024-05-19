@@ -10,7 +10,7 @@ from toolz import reduce, partial
 from scipy.optimize import minimize
 from sklearn.neighbors import KDTree
 from multiprocessing import Pool
-from pysyncon import Dataprep, Synth, PenalizedSynth
+from pysyncon import Dataprep, RobustSynth, PenalizedSynth
 import random
 import warnings
 import tqdm 
@@ -630,7 +630,13 @@ def isc(data_objects: list, k_n: int=500, random=False) -> dict:
             'weighted_diff': weighted_diffs}
 
 
-def sc_b(data_object, penalized: bool=False, reduction: bool=False, k_n: int=500, lambda_: float=.01):
+def sc_b(data_object, 
+         penalized: bool=False, 
+         reduction: bool=False, 
+         k_n: int=500, 
+         lambda_: float=.01,
+         placebo: bool=False
+         ):
     data = data_object['data'].copy()
     ncol = data.shape[1] - 1
     sample_weights = data_object['weight'].copy()
@@ -662,6 +668,47 @@ def sc_b(data_object, penalized: bool=False, reduction: bool=False, k_n: int=500
     covariates = pivoted_df.columns.to_list()
     covariates.remove('year')
     covariates.remove('pidp')
+    if placebo:
+        l_s_cntrl = []
+        all_units = np.append(controls, treated_unit)
+        for unit in all_units:
+            if unit == treated_unit:
+                continue
+            indices = np.where(all_units == unit)
+            p_controls = np.delete(all_units, indices)
+            dataprep = Dataprep(
+                foo=pivoted_df,
+                predictors=covariates,
+                predictors_op="mean",
+                time_predictors_prior=range(min_year, 0),
+                dependent=target_var,
+                unit_variable="pidp",
+                time_variable="year",
+                treatment_identifier=unit,
+                controls_identifier=p_controls,
+                time_optimize_ssr=range(min_year, 0),
+            )
+            if penalized:
+                psynth = PenalizedSynth()
+                psynth.fit(dataprep=dataprep, lambda_=lambda_)
+                s_cntrl = data.drop(columns=unit).dot(psynth.W).loc[target_var] # synthetic control is now based on the new subset of observations
+                treated = data[treated_unit].loc[target_var]
+                diff = treated - s_cntrl
+                rmse = np.sqrt(np.mean(np.square(diff[:-1])))
+                weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
+                w_treated = sample_weights.multiply(treated, axis=0)['weight_yearx']
+                w_synth = sample_weights.multiply(s_cntrl, axis=0)['weight_yearx']
+
+        return {
+            'rmse': None,
+            'synth': l_s_cntrl,
+            'treated': None,
+            'diff': None,
+            'weighted_diff': None,
+            'w_treated': None,
+            'w_synth': None
+        }
+        
     try:
         dataprep = Dataprep(
             foo=pivoted_df,
@@ -704,7 +751,12 @@ def sc_b(data_object, penalized: bool=False, reduction: bool=False, k_n: int=500
          }
 
 
-def isc_b(data_objects: list, penalized: bool=False, reduction: bool=False, k_n: int=500, lambda_: float=.01) -> dict:
+def isc_b(data_objects: list, 
+          penalized: bool=False, 
+          reduction: bool=False, 
+          k_n: int=500, 
+          lambda_: float=.01,
+          placebo: bool=False) -> dict:
     synths = []
     treats = []
     diffs = []
@@ -713,7 +765,7 @@ def isc_b(data_objects: list, penalized: bool=False, reduction: bool=False, k_n:
     w_synth = []
     rmses = []
     with Pool() as p:
-        out = p.starmap(sc_b, tqdm.tqdm([(data, penalized, reduction, k_n, lambda_) for data in data_objects]))
+        out = p.starmap(sc_b, tqdm.tqdm([(data, penalized, reduction, k_n, lambda_, placebo) for data in data_objects]))
     
     for ele in out:
         if ele is not None:
