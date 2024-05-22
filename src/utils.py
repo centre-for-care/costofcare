@@ -2,18 +2,9 @@ import glob
 import os
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime
-from typing import List
-from operator import add
-from toolz import reduce, partial
+from toolz import partial
 from scipy.optimize import minimize
-from sklearn.neighbors import KDTree
-from multiprocessing import Pool
-from pysyncon import Dataprep, RobustSynth, PenalizedSynth
-import random
 import warnings
-import tqdm 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 
@@ -97,14 +88,6 @@ def trimmer(x: pd.Series, lwb: float=0.0, upb: float=0.99):
     lower_bound = s.quantile(lwb)
     upper_bound = s.quantile(upb)
     return s.apply(lambda x: x if lower_bound <= x <= upper_bound else np.nan)
-
-
-def create_index(x):
-    """
-    Create relative index based on length of array.
-    """
-    y = np.arange(len(x)) + 1
-    return y - x
 
 
 def recoding_and_cleaning(in_data, cpih_data):
@@ -436,6 +419,9 @@ def recoding_and_cleaning(in_data, cpih_data):
                        "don't know": np.nan,
                        "missing": np.nan}
                      )
+    data['employed_num'] = data.employed.replace({"inapplicable": np.nan,
+                                     'employed': 1,
+                                     'unemployed': 0})
     data['wage'] = data.paygu_dv.replace({'inapplicable': np.nan, 'proxy': np.nan, 'missing': np.nan})
     cpih_data['date'] = pd.to_datetime(cpih_data.date, format='%b-%y')
     data['istrtdaty'] = data['istrtdaty'].astype('str').replace({'inapplicable': np.nan, 'missing': np.nan, "don't know": np.nan})
@@ -568,221 +554,3 @@ def get_control_clean(c_data, t_data, features, target_var, weights=None):
         out['weight'] = t_data[t_data.pidp == t_id][['year', weights]].set_index('year')
         samples.append(out)
     return samples
-
-def sc(x, k_n, random=False):
-    data = x['data'].copy()
-    ncol = data.shape[1] - 1
-    sample_weights = x['weight'].copy()
-    data.index.names = ['var', 'year']
-    t_time = x['treat_time']
-    target_var = x['target_var']
-    data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
-    sample_weights.index = sample_weights.index - t_time
-    data = data.sort_index(ascending=True).copy()
-    data = data.loc[(slice(None), slice(-8, 8)), :].copy() # this limits to only -5 to 5 years
-    df_T0 = data.loc[pd.IndexSlice[:, :-1], :]
-    Y_0 = df_T0.iloc[:, 0].values
-    if ncol < k_n:
-        k_n = ncol
-    try:
-        kdt = KDTree(df_T0.T, leaf_size=30, metric='euclidean')
-    except ValueError:
-        return None
-    idx = kdt.query(df_T0.T, k=k_n, return_distance=False)[0, 1:]
-    Y_i = df_T0.iloc[:, idx].values
-    if random:
-        Y_i = df_T0.iloc[:, 1:].sample(n=k_n, axis='columns')
-        idx = Y_i.columns
-        weights = get_w(Y_i, Y_0)
-        synth = data.loc[:, idx].dot(weights).loc[target_var]
-    else:
-        weights = get_w(Y_i, Y_0)
-        synth = data.iloc[:, idx].dot(weights).loc[target_var] # synthetic control is now based on the new subset of observations
-    treated = data.iloc[:, 0].loc[target_var]
-    diff = treated - synth
-    weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
-    return {
-        'synth': synth,
-        'treated': treated,
-        'diff': diff,
-        'weighted_diff': weighted_diff
-         }
-
-def isc(data_objects: list, k_n: int=500, random=False) -> dict:
-    synths = []
-    treats = []
-    diffs = []
-    weighted_diffs = []
-    with Pool() as p:
-        out = p.starmap(sc, tqdm.tqdm([(data, k_n, random) for data in data_objects]))
-    
-    for ele in out:
-        if ele is not None:
-            synths.append(ele['synth'])
-            treats.append(ele['treated'])
-            diffs.append(ele['diff'])
-            weighted_diffs.append(ele['weighted_diff'])
-        else:
-            continue
-    return {'synths': synths,
-            'treats': treats,
-            'diffs': diffs,
-            'weighted_diff': weighted_diffs}
-
-
-def sc_b(data_object, 
-         penalized: bool=False, 
-         reduction: bool=False, 
-         k_n: int=500, 
-         lambda_: float=.01,
-         placebo: bool=False
-         ):
-    data = data_object['data'].copy()
-    ncol = data.shape[1] - 1
-    sample_weights = data_object['weight'].copy()
-    data.index.names = ['var', 'year']
-    t_time = data_object['treat_time']
-    target_var = data_object['target_var']
-    treated_unit = data_object['treat_id']
-    data.index = data.index.map(lambda idx: (idx[0], idx[1] - t_time))
-    sample_weights.index = sample_weights.index - t_time
-    data = data.sort_index(ascending=True).copy()
-    data = data.loc[(slice(None), slice(-8, 8)), :].copy()
-    min_year = data.index.get_level_values('year').min().astype(int)
-    if reduction:
-        if ncol < k_n:
-            k_n = ncol
-        try:
-            df_T0 = data.loc[pd.IndexSlice[:, :-1], :]
-            kdt = KDTree(df_T0.T, leaf_size=30, metric='euclidean')
-            idx = kdt.query(df_T0.T, k=k_n, return_distance=False)[0, :]
-            data = data.iloc[:, idx]
-        except ValueError:
-            return None
-    melted_df = data.reset_index().melt(id_vars=['var', 'year'], var_name='pidp')
-    pivoted_df = melted_df.pivot(index=['year', 'pidp'], columns='var', values='value').reset_index()
-    pivoted_df =pivoted_df.sort_values(by=['pidp', 'year'])
-    pivoted_df = pivoted_df.reset_index(drop=True) 
-    pivoted_df.columns.name = ''
-    controls = pivoted_df.pidp[pivoted_df.pidp!=treated_unit].unique()
-    covariates = pivoted_df.columns.to_list()
-    covariates.remove('year')
-    covariates.remove('pidp')
-    if placebo:
-        l_s_cntrl = []
-        all_units = np.append(controls, treated_unit)
-        for unit in all_units:
-            if unit == treated_unit:
-                continue
-            indices = np.where(all_units == unit)
-            p_controls = np.delete(all_units, indices)
-            dataprep = Dataprep(
-                foo=pivoted_df,
-                predictors=covariates,
-                predictors_op="mean",
-                time_predictors_prior=range(min_year, 0),
-                dependent=target_var,
-                unit_variable="pidp",
-                time_variable="year",
-                treatment_identifier=unit,
-                controls_identifier=p_controls,
-                time_optimize_ssr=range(min_year, 0),
-            )
-            if penalized:
-                psynth = PenalizedSynth()
-                psynth.fit(dataprep=dataprep, lambda_=lambda_)
-                s_cntrl = data.drop(columns=unit).dot(psynth.W).loc[target_var] # synthetic control is now based on the new subset of observations
-                treated = data[treated_unit].loc[target_var]
-                diff = treated - s_cntrl
-                rmse = np.sqrt(np.mean(np.square(diff[:-1])))
-                weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
-                w_treated = sample_weights.multiply(treated, axis=0)['weight_yearx']
-                w_synth = sample_weights.multiply(s_cntrl, axis=0)['weight_yearx']
-
-        return {
-            'rmse': None,
-            'synth': l_s_cntrl,
-            'treated': None,
-            'diff': None,
-            'weighted_diff': None,
-            'w_treated': None,
-            'w_synth': None
-        }
-        
-    try:
-        dataprep = Dataprep(
-            foo=pivoted_df,
-            predictors=covariates,
-            predictors_op="mean",
-            time_predictors_prior=range(min_year, 0),
-            dependent=target_var,
-            unit_variable="pidp",
-            time_variable="year",
-            treatment_identifier=treated_unit,
-            controls_identifier=controls,
-            time_optimize_ssr=range(min_year, 0),
-        )
-    except ValueError:
-        return None
-    try:
-        if penalized:
-            synth = PenalizedSynth()
-            synth.fit(dataprep=dataprep, lambda_=lambda_)
-        else:
-            synth = Synth()
-            synth.fit(dataprep=dataprep)
-    except KeyError:
-        return None
-    s_cntrl = data.drop(columns=treated_unit).dot(synth.W).loc[target_var] # synthetic control is now based on the new subset of observations
-    treated = data[treated_unit].loc[target_var]
-    diff = treated - s_cntrl
-    rmse = np.sqrt(np.mean(np.square(diff[:-1])))
-    weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
-    w_treated = sample_weights.multiply(treated, axis=0)['weight_yearx']
-    w_synth = sample_weights.multiply(s_cntrl, axis=0)['weight_yearx']
-    return {
-        'rmse': rmse,
-        'synth': s_cntrl,
-        'treated': treated,
-        'diff': diff,
-        'weighted_diff': weighted_diff,
-        'w_treated': w_treated,
-        'w_synth': w_synth
-         }
-
-
-def isc_b(data_objects: list, 
-          penalized: bool=False, 
-          reduction: bool=False, 
-          k_n: int=500, 
-          lambda_: float=.01,
-          placebo: bool=False) -> dict:
-    synths = []
-    treats = []
-    diffs = []
-    weighted_diffs = []
-    w_treated = []
-    w_synth = []
-    rmses = []
-    with Pool() as p:
-        out = p.starmap(sc_b, tqdm.tqdm([(data, penalized, reduction, k_n, lambda_, placebo) for data in data_objects]))
-    
-    for ele in out:
-        if ele is not None:
-            rmses.append(ele['rmse'])
-            synths.append(ele['synth'])
-            treats.append(ele['treated'])
-            diffs.append(ele['diff'])
-            weighted_diffs.append(ele['weighted_diff'])
-            w_treated.append(ele['w_treated'])
-            w_synth.append(ele['w_synth'])
-        else:
-            continue
-    return {'rmses': rmses,
-            'synths': synths,
-            'treats': treats,
-            'diffs': diffs,
-            'weighted_diff': weighted_diffs,
-            'w_treated': w_treated,
-            'w_synth': w_synth}
-
