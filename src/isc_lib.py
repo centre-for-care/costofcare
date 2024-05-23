@@ -109,7 +109,7 @@ def sc(data_object,
     treated = data[treated_unit].loc[target_var]
     diff = treated - s_cntrl
     rmse = np.sqrt(np.mean(np.square(diff[:-1])))
-    weighted_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
+    w_diff = sample_weights.multiply(diff, axis=0)['weight_yearx']
     w_treated = sample_weights.multiply(treated, axis=0)['weight_yearx']
     w_synth = sample_weights.multiply(s_cntrl, axis=0)['weight_yearx']
     return {
@@ -117,7 +117,7 @@ def sc(data_object,
         'synth': s_cntrl,
         'treated': treated,
         'diff': diff,
-        'weighted_diff': weighted_diff,
+        'w_diff': w_diff,
         'w_treated': w_treated,
         'w_synth': w_synth,
         'boots_var': boots_var
@@ -132,7 +132,7 @@ def isc(data_objects: list,
     synths = []
     treats = []
     diffs = []
-    weighted_diffs = []
+    w_diffs = []
     w_treated = []
     w_synth = []
     rmses = []
@@ -146,7 +146,7 @@ def isc(data_objects: list,
             synths.append(ele['synth'])
             treats.append(ele['treated'])
             diffs.append(ele['diff'])
-            weighted_diffs.append(ele['weighted_diff'])
+            w_diffs.append(ele['w_diff'])
             w_treated.append(ele['w_treated'])
             w_synth.append(ele['w_synth'])
             boots_vars.append(ele['boots_var'])
@@ -156,7 +156,7 @@ def isc(data_objects: list,
             'synths': synths,
             'treats': treats,
             'diffs': diffs,
-            'weighted_diff': weighted_diffs,
+            'w_diff': w_diffs,
             'w_treated': w_treated,
             'w_synth': w_synth,
             'boots_vars': boots_vars}
