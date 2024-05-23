@@ -40,12 +40,13 @@ def sc(data_object,
     melted_df = data.reset_index().melt(id_vars=['var', 'year'], var_name='pidp')
     pivoted_df = melted_df.pivot(index=['year', 'pidp'], columns='var', values='value').reset_index()
     pivoted_df =pivoted_df.sort_values(by=['pidp', 'year'])
-    pivoted_df = pivoted_df.reset_index(drop=True) 
+    pivoted_df = pivoted_df.reset_index(drop=True)
     pivoted_df.columns.name = ''
     controls = pivoted_df.pidp[pivoted_df.pidp!=treated_unit].unique().tolist()
     covariates = pivoted_df.columns.to_list()
     covariates.remove('year')
-    covariates.remove('pidp')       
+    covariates.remove('pidp')
+    print(pivoted_df)
     try:
         dataprep = Dataprep(
             foo=pivoted_df,

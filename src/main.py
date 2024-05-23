@@ -1,6 +1,8 @@
 import pandas as pd
 from utils import get_control_clean
 from isc_lib import isc
+import warnings
+warnings.filterwarnings("ignore")
 
 
 def get_intertisial_data(clean_t, clean_c, target_var):
