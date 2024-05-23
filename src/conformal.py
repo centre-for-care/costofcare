@@ -43,7 +43,9 @@ plt.legend()
 plt.show()
 
 
-pred_data = data_p.assign(**{"residuals": data_p["California"] - synth._synthetic(range(1970, 2001))})
+pred_data = data_p.assign(**{
+    "residuals": data_p["California"] - synth._synthetic(Z0=synth.dataprep.make_outcome_mats(time_period=range(1970,2000+1))[0])
+                             })
 
 
 def with_effect(df, state, null_hypothesis, start_at, window):
@@ -52,6 +54,7 @@ def with_effect(df, state, null_hypothesis, start_at, window):
     y = np.where(window_mask, df[state] - null_hypothesis, df[state])
     
     return df.assign(**{state: y})
+
 
 
 def residuals(df, state, null, intervention_start, window):
@@ -72,20 +75,22 @@ def residuals(df, state, null, intervention_start, window):
             time_optimize_ssr=range(1970, 1988)
             )
 
-    synth = PenalizedSynth()
-    synth.fit(dataprep, lambda_=0.1)
+    synth = Synth()
+    synth.fit(dataprep)
     
-    y0_est = synth._synthetic(range(1970, 2001))
+    y0_est = synth._synthetic(Z0=synth.dataprep.make_outcome_mats(time_period=range(1970,2000+1))[0])
     
     residuals = null_data[state] - y0_est
     
     test_mask = (null_data.index >= intervention_start) & (null_data.index < (intervention_start + window))
     
-    return pd.DataFrame({
+    out = pd.DataFrame({
         "y0": null_data[state],
         "y0_est": y0_est,
         "residuals": residuals,
         "post_intervention": test_mask})[lambda d: d.index < (intervention_start + window)]
+    return out
+
 
 
 residuals_df = residuals(data_p,
@@ -167,7 +172,9 @@ ci_df = confidence_interval(
     window=2000 - 1988 + 1
 )
 
-pred_data = data_p.assign(**{"residuals": data_p["California"] - synth._synthetic(range(1970, 2001))})
+pred_data = data_p.assign(**{
+    "residuals": data_p["California"] - synth._synthetic(Z0=synth.dataprep.make_outcome_mats(time_period=range(1970,2000+1))[0])
+                             })
 
 
 plt.figure(figsize=(10,5))

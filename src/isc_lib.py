@@ -133,8 +133,8 @@ def isc(data_objects: list,
     treats = []
     diffs = []
     w_diffs = []
-    w_treated = []
-    w_synth = []
+    w_treats = []
+    w_synths = []
     rmses = []
     boots_vars = []
     with Pool() as p:
@@ -147,8 +147,8 @@ def isc(data_objects: list,
             treats.append(ele['treated'])
             diffs.append(ele['diff'])
             w_diffs.append(ele['w_diff'])
-            w_treated.append(ele['w_treated'])
-            w_synth.append(ele['w_synth'])
+            w_treats.append(ele['w_treated'])
+            w_synths.append(ele['w_synth'])
             boots_vars.append(ele['boots_var'])
         else:
             continue
@@ -156,8 +156,8 @@ def isc(data_objects: list,
             'synths': synths,
             'treats': treats,
             'diffs': diffs,
-            'w_diff': w_diffs,
-            'w_treated': w_treated,
-            'w_synth': w_synth,
+            'w_diffs': w_diffs,
+            'w_treats': w_treats,
+            'w_synths': w_synths,
             'boots_vars': boots_vars}
 
