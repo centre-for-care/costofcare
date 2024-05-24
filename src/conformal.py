@@ -39,9 +39,8 @@ def residuals(df_aug,
     synth = PenalizedSynth()
     synth.fit(dataprep)
     y0_est = synth._synthetic(Z0=synth.dataprep.make_outcome_mats(time_period=range(1970,intervention_start+window+1))[0])
-    print(y0_est)
     residuals = null_data[treated_unit] - y0_est
-    print(null_data[treated_unit])
+    print(residuals)
     test_mask = (null_data.index >= intervention_start) & (null_data.index < (intervention_start + window))
     out = pd.DataFrame({
         "y0": null_data[treated_unit],
