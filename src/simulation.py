@@ -109,19 +109,20 @@ def simple_isc(data, n, t_0):
 
 
 
-def test_fit(n):
+def test_fit(n, module_step):
     N = []
     rmspe_list = []
-    sim_df = gen_data_mix(n_treat=10)
+    sim_df = gen_data_mix(n_treat=70,
+                          range_gamma_pop_step=100)
     for n in range(1,n):
-        if n % 100 == 0:
+        if n % module_step == 0:
             av_rmspe = simple_isc(sim_df, n, 50)
             rmspe_list.append(av_rmspe)
             N.append(n)
     return pd.DataFrame({'N':N, 'fit': rmspe_list})
 
 
-fit_df = test_fit(1000)
+fit_df = test_fit(100, 2)
 
 fit_df.plot(x='N', y='fit', legend=False, figsize=(14, 7))
 plt.xlabel('Donor Pool Sample Size')
