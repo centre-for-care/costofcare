@@ -1,4 +1,3 @@
-from os import replace
 from sklearn.neighbors import KDTree
 import random
 import pandas as pd
@@ -6,14 +5,35 @@ import numpy as np
 import matplotlib.pyplot as plt
 from toolz import partial
 from scipy.optimize import minimize
+import time
 
 
-# the expression to minimise, since \mu is 0, we are one looking for \omega/W
 def argmin_w(W, Y_i, Y_0):
-    return np.sqrt(np.sum((Y_0 - Y_i.dot(W))**2))
+    """
+    Minimize the expression for synthetic control weights.
     
-# a very simple version of synth controls
+    Args:
+        W (array): Array of weights.
+        Y_i (array): Matrix of control unit outcomes.
+        Y_0 (array): Vector of treated unit outcomes.
+    
+    Returns:
+        float: The minimized value of the synthetic control expression.
+    """
+    return np.sqrt(np.sum((Y_0 - Y_i.dot(W))**2))
+
+
 def get_w(Y_i, Y_0):
+    """
+    Get the synthetic control weights.
+    
+    Args:
+        Y_i (array): Matrix of control unit outcomes.
+        Y_0 (array): Vector of treated unit outcomes.
+    
+    Returns:
+        array: Optimal weights for the synthetic control.
+    """
     w_start = [1/Y_i.shape[1]]*Y_i.shape[1]
     weights = minimize(partial(argmin_w, Y_i=Y_i, Y_0=Y_0),
                        np.array(w_start),
@@ -25,6 +45,20 @@ def get_w(Y_i, Y_0):
 
 
 def gen_treated(mu, gamma, alpha, beta, steps, treat_time):
+    """
+    Generate data for treated units.
+    
+    Args:
+        mu (float): Mean of the normal distribution.
+        gamma (float): Standard deviation of the normal distribution.
+        alpha (float): Alpha parameter for the gamma distribution.
+        beta (float): Beta parameter for the gamma distribution.
+        steps (int): Number of time steps.
+        treat_time (int): Time step at which treatment begins.
+    
+    Returns:
+        list: Generated data for the treated unit.
+    """
     t = []
     py = random.gauss(mu, gamma)
     for i in range(1,steps):
@@ -50,12 +84,31 @@ def gen_data_mix(steps=100,
                  range_mu_pop=10,
                  range_mu_pop_step=1,
                  ):
+    """
+    Generate a mixture of control and treated data.
+    
+    Args:
+        steps (int): Number of time steps.
+        cases (int): Number of control cases.
+        pop_n (int): Number of subpopulations.
+        range_treat_alpha (int): Range for alpha parameter in gamma distribution.
+        range_treat_beta (int): Range for beta parameter in gamma distribution.
+        n_treat (int): Number of treated cases.
+        treat_time (int): Time step at which treatment begins.
+        range_gamma_pop (int): Range for gamma parameter in normal distribution.
+        range_gamma_pop_step (int): Step size for gamma parameter in normal distribution.
+        range_mu_pop (int): Range for mu parameter in normal distribution.
+        range_mu_pop_step (int): Step size for mu parameter in normal distribution.
+    
+    Returns:
+        DataFrame: Generated data for control and treated units.
+    """
     X = list(range(1,steps))
     c = []
-    #Parameter of the subpopulations
+    # Parameter of the subpopulations
     mu_list = random.choices(range(0,range_gamma_pop, range_gamma_pop_step), k=pop_n)
     gamma_list = random.choices(range(0,range_mu_pop, range_mu_pop_step), k=pop_n)
-    #Loop generating cases in each subpopulation
+    # Loop generating cases in each subpopulation
     for i in range(0, cases):
         y = []
         mu = random.choice(mu_list)
@@ -68,7 +121,7 @@ def gen_data_mix(steps=100,
         c.append(y)
     df = pd.DataFrame(c).T
     df.columns = [f'c{x}' for x in range(1, cases+1)]
-    #loop generating data for the treated case/cases
+    # Loop generating data for the treated case/cases
     alpha_list = random.choices(range(1,range_treat_alpha), k=n_treat)
     beta_list = random.choices(range(1,range_treat_beta), k=n_treat)
     for i in range(0, n_treat):
@@ -88,6 +141,17 @@ def gen_data_mix(steps=100,
 
 
 def simple_isc(data, n, t_0):
+    """
+    Perform simple synthetic control analysis.
+    
+    Args:
+        data (DataFrame): Data containing control and treated units.
+        n (int): Number of nearest neighbors to consider.
+        t_0 (int): Time step at which treatment begins.
+    
+    Returns:
+        float: Average root mean square prediction error (RMSPE).
+    """
     control_cols = [col for col in data.columns if col.startswith('c')]
     treated_cols = [col for col in data.columns if col.startswith('t')]
     controls = data[control_cols]
@@ -108,23 +172,39 @@ def simple_isc(data, n, t_0):
     return np.mean(errors)
 
 
-
 def test_fit(n, module_step):
+    """
+    Test the fit of the synthetic control model.
+    
+    Args:
+        n (int): Maximum number of nearest neighbors to consider.
+        module_step (int): Step size for varying the number of nearest neighbors.
+    
+    Returns:
+        DataFrame: Results of the fit tests including RMSPE and computation time.
+    """
     N = []
     rmspe_list = []
+    elapsed_times = []
     sim_df = gen_data_mix(n_treat=70,
                           range_gamma_pop_step=100)
     for n in range(1,n):
         if n % module_step == 0:
+            start = time.time()
             av_rmspe = simple_isc(sim_df, n, 50)
+            end = time.time()
+            calc_time = end - start
             rmspe_list.append(av_rmspe)
             N.append(n)
-    return pd.DataFrame({'N':N, 'fit': rmspe_list})
+            elapsed_times.append(calc_time)
+    return pd.DataFrame({'N':N,
+                         'fit': rmspe_list,
+                         'time': elapsed_times})
 
 
-fit_df = test_fit(100, 2)
-
-fit_df.plot(x='N', y='fit', legend=False, figsize=(14, 7))
-plt.xlabel('Donor Pool Sample Size')
-plt.ylabel('Root Mean Square Prediction Error')
-plt.show()
+if __name__ == "__main__":
+    fit_df = test_fit(200, 50)
+    fit_df.plot(x='N', y='fit', legend=False, figsize=(14, 7))
+    plt.xlabel('Donor Pool Sample Size')
+    plt.ylabel('Root Mean Square Prediction Error')
+    plt.show()
