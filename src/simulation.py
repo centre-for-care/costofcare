@@ -1,15 +1,19 @@
-from sklearn.neighbors import KDTree
-import random
-import pandas as pd
-import numpy as np
-from toolz import partial
-from scipy.optimize import minimize
+# Standard library imports
+import os
 import time
-from tqdm import tqdm
-import matplotlib
-from multiprocessing import Pool, cpu_count
-matplotlib.use("TkAgg")
+from multiprocessing import Pool, cpu_count, Manager
 
+# Third-party imports
+import matplotlib
+import numpy as np
+import pandas as pd
+from scipy.optimize import minimize
+from sklearn.neighbors import KDTree
+from toolz import partial
+from tqdm import tqdm
+
+# Configure matplotlib
+matplotlib.use("TkAgg")
 
 def argmin_w(W, Y_i, Y_0):
     """
@@ -235,14 +239,6 @@ def compute_rmspe(args):
 #                         'fit': rmspe_list,
 #                         'time': elapsed_times,
 #                         'n_treat': n_treat_list})
-
-
-import numpy as np
-import pandas as pd
-import time
-from multiprocessing import Pool, cpu_count, Manager
-from tqdm import tqdm
-import os
 
 
 def get_seed_list():
