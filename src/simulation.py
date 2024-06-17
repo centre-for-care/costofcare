@@ -2,10 +2,13 @@ from sklearn.neighbors import KDTree
 import random
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from toolz import partial
 from scipy.optimize import minimize
 import time
+from tqdm import tqdm
+import matplotlib
+from multiprocessing import Pool, cpu_count
+matplotlib.use("TkAgg")
 
 
 def argmin_w(W, Y_i, Y_0):
@@ -103,7 +106,7 @@ def gen_data_mix(steps=100,
     Returns:
         DataFrame: Generated data for control and treated units.
     """
-    X = list(range(1,steps))
+    X = list(range(1, steps))
     c = []
     # Parameter of the subpopulations
     mu_list = random.choices(range(0,range_gamma_pop, range_gamma_pop_step), k=pop_n)
@@ -124,6 +127,7 @@ def gen_data_mix(steps=100,
     # Loop generating data for the treated case/cases
     alpha_list = random.choices(range(1,range_treat_alpha), k=n_treat)
     beta_list = random.choices(range(1,range_treat_beta), k=n_treat)
+    new_columns = {}
     for i in range(0, n_treat):
         mu = random.choice(mu_list)
         gamma = random.choice(gamma_list)
@@ -135,8 +139,11 @@ def gen_data_mix(steps=100,
                         beta=beta,
                         steps=steps,
                         treat_time=treat_time)
-        T = pd.Series(t)
-        df[f't{i}'] = T
+        new_columns[f't{i}'] = t  # Store the new column data
+#        T = pd.Series(t)
+#        df[f't{i}'] = T
+    new_columns_df = pd.DataFrame(new_columns)
+    df = pd.concat([df, new_columns_df], axis=1)
     return df
 
 
@@ -172,39 +179,125 @@ def simple_isc(data, n, t_0):
     return np.mean(errors)
 
 
-def test_fit(n, module_step):
+
+
+def compute_rmspe(args):
+    n_treat, n = args
+    sim_df = gen_data_mix(n_treat=n_treat, range_gamma_pop_step=100)
+    start = time.time()
+    av_rmspe = simple_isc(sim_df, n, 50)
+    end = time.time()
+    calc_time = end - start
+    return n_treat, n, av_rmspe, calc_time
+
+
+
+#def test_fit(end_point, num_points):
+#    """
+#    Test the fit of the synthetic control model.
+#
+#    Args:
+#        endpoint (int): The stopping number for our logarithmic range
+#        num_points (int): The number of points in our list.
+#
+#    Returns:
+#        DataFrame: Results of the fit tests including RMSPE and computation time.
+#    """
+#    rmspe_list = []
+#    N = []
+#    elapsed_times = []
+#    n_treat_list = []
+#    start = 10
+#    end = end_point
+#    num_points = num_points
+#    log_space = np.logspace(np.log2(start), np.log2(end), num=num_points, base=2)
+#    log_sequence = sorted(set(map(int, log_space)))
+#
+#    n_treat_values = [25, 50, 100, 250, 500]
+#    total_iterations = len(n_treat_values) * len(log_sequence)
+#
+#    with tqdm(total=total_iterations) as pbar:
+#        for n_treat in n_treat_values:
+#            sim_df = gen_data_mix(n_treat=n_treat,
+#                                  range_gamma_pop_step=100)
+#            for n in log_sequence:
+#                n_treat_list.append(n_treat)
+#                start = time.time()
+#                av_rmspe = simple_isc(sim_df, n, 50)
+#                end = time.time()
+#                calc_time = end - start
+#                rmspe_list.append(av_rmspe)
+#                N.append(n)
+#                elapsed_times.append(calc_time)
+#                pbar.update(1)
+#
+#    return pd.DataFrame({'N': N,
+#                         'fit': rmspe_list,
+#                         'time': elapsed_times,
+#                         'n_treat': n_treat_list})
+
+
+import numpy as np
+import pandas as pd
+import time
+from multiprocessing import Pool, cpu_count, Manager
+from tqdm import tqdm
+import os
+
+
+def get_seed_list():
+    seed_list_path = os.path.join(os.getcwd(), '..', 'data', 'seeds', 'seed_list.txt')
+    with open(seed_list_path) as f:
+        return [int(line.rstrip('\n')) for line in f]
+
+
+
+def process_single_task(args):
+    n_treat, n, seed = args
+    np.random.seed(seed)  # Set seed for reproducibility
+    sim_df = gen_data_mix(n_treat=n_treat, range_gamma_pop_step=100)
+    start = time.time()
+    av_rmspe = simple_isc(sim_df, n, 50)
+    end = time.time()
+    calc_time = end - start
+    return n_treat, n, av_rmspe, calc_time, seed
+
+
+def test_fit(end_point, num_points):
     """
-    Test the fit of the synthetic control model.
-    
+    Test the fit of the synthetic control model in parallel.
+
     Args:
-        n (int): Maximum number of nearest neighbors to consider.
-        module_step (int): Step size for varying the number of nearest neighbors.
-    
+        endpoint (int): The stopping number for our logarithmic range.
+        num_points (int): The number of points in our list.
+
     Returns:
-        DataFrame: Results of the fit tests including RMSPE and computation time.
+        DataFrame: Results of the fit tests including RMSPE, computation time, and seed used.
     """
-    N = []
-    rmspe_list = []
-    elapsed_times = []
-    sim_df = gen_data_mix(n_treat=70,
-                          range_gamma_pop_step=100)
-    for n in range(1,n):
-        if n % module_step == 0:
-            start = time.time()
-            av_rmspe = simple_isc(sim_df, n, 50)
-            end = time.time()
-            calc_time = end - start
-            rmspe_list.append(av_rmspe)
-            N.append(n)
-            elapsed_times.append(calc_time)
-    return pd.DataFrame({'N':N,
-                         'fit': rmspe_list,
-                         'time': elapsed_times})
+    start_val = 10
+    end_val = end_point
+    log_space = np.logspace(np.log2(start_val), np.log2(end_val), num=num_points, base=2)
+    log_sequence = sorted(set(map(int, log_space)))
+
+    seed_limit = 10
+    seed_list = get_seed_list()[:seed_limit]  # Assuming get_seed_list() returns a list of seeds
+
+    n_treat_values = [25, 50, 100, 250]
+    total_iterations = len(n_treat_values) * len(log_sequence) * len(seed_list)
+
+    tasks = [(n_treat, n, seed) for seed in seed_list for n_treat in n_treat_values for n in log_sequence]
+
+    results = []
+    with tqdm(total=total_iterations) as pbar:
+        with Pool(cpu_count()) as pool:
+            for result in pool.imap_unordered(process_single_task, tasks):
+                results.append(result)
+                pbar.update()
+
+    df_results = pd.DataFrame(results, columns=['N', 'fit', 'time', 'n_treat', 'seed'])
+    return df_results
 
 
 if __name__ == "__main__":
-    fit_df = test_fit(200, 50)
-    fit_df.plot(x='N', y='fit', legend=False, figsize=(14, 7))
-    plt.xlabel('Donor Pool Sample Size')
-    plt.ylabel('Root Mean Square Prediction Error')
-    plt.show()
+    fit_df = test_fit(1000, 50)
+    fit_df.to_csv('../data/simulation/fit_data.csv')
