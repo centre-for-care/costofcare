@@ -1,0 +1,114 @@
+***********************ANALYSIS*************************************************
+********************************************************************************
+
+clear all
+
+//Maria work laptop
+global username "`c(username)'"
+dis "$username" // Displays your user name on your computer
+
+if "$username" == "if1mp" { 
+global data 	"C:\Users\if1mp\Desktop\project2"
+global output 	"C:\Users\if1mp\Desktop\project2"
+global log 		"C:\Users\if1mp\Desktop\project2"
+global graph  	"C:\Users\if1mp\Desktop\project2"
+global table 	"C:\Users\if1mp\Desktop\project2"
+
+}
+
+
+use "$data\generated_new"
+
+
+
+keep pidp year ind_inc_deflated male dvage married asian black mixed  white other lower_education intermediate_education advanced_education employed_d hhsize weight_yearx low_int1 medium_low_int1 medium_high_int1 high_int1 first_low_intensity_ok first_medium_low_intensity_ok first_medium_high_intensity_ok first_high_intensity_ok hh_inc_deflated year_reindex year_treat_reindex reindex year_treated year_treat_reindex initial_year years_treated year_reindex treated ever_treated year_treated year_treat_reindex
+
+sort pidp year 
+
+*variable prep for sdid
+ gen treated_sdid=1 if year>=year_treated
+ replace treated_sdid=0 if year<year_treated
+replace treated_sdid=0 if ever_treated==0
+*low intensity
+gen sdid_low = treated_sdid
+replace sdid_low=. if medium_low_int1==1| medium_high_int1==1| high_int1==1
+replace sdid_low=. if low_int1==. & ever_treated==1 
+*medium low intensity
+gen sdid_mediumlow= treated_sdid
+ replace sdid_mediumlow=. if low_int1==1| medium_high_int1==1| high_int1==1
+replace sdid_mediumlow=. if medium_low_int1==. & ever_treated==1 
+* medium high intensity 
+ gen sdid_mediumhigh= treated_sdid
+ replace sdid_mediumhigh=. if low_int1==1| medium_low_int1==1| high_int1==1
+replace sdid_mediumhigh=. if medium_high_int1==. & ever_treated==1 
+ *  high intensity 
+ gen sdid_high= treated_sdid
+ replace sdid_high=. if low_int1==1| medium_low_int1==1| medium_high_int1==1
+replace sdid_high=. if high_int1==. & ever_treated==1 
+ 
+ 
+*reindex: generate a reindex taking value zero= year treated for treated units and equal to the middle wave for non treated 
+egen year_count = count(year), by(pidp) 
+ gen middle_year = .
+replace middle_year= initial_year + (year_count/2)
+gen middle_year2 = floor(middle_year)
+drop middle_year
+rename middle_year2 middle_year
+
+gen reindex_year=.
+replace reindex_year=year- middle_year
+
+gen final_reindex=.
+replace final_reindex= reindex_year if ever_treated==0
+replace final_reindex= reindex if ever_treated==1
+drop if final_reindex<-5 | final_reindex>=6
+ 
+*drop all missing values for the covariates
+drop if male==. | dvage==. | married==.| asian==.| black==.| mixed==.|  white==.|  intermediate_education==.| advanced_education==.| employed_d==.| hhsize==.
+
+ *****INDIVIDUAL INCOME
+*low_intensity ****************************************************************
+preserve
+drop if ind_inc_deflated==.
+drop if sdid_low==.
+egen totalyear = count(year), by(pidp)
+keep if totalyear== 11
+xtset pidp final_reindex
+sdid ind_inc_deflated pidp final_reindex sdid_low, vce(bootstrap) seed(1213) covariates(male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize)  graph g1on g2_opt(ylabel(0(25)150) ytitle("Individual Income") scheme(sj)) g1_opt(xtitle("") scheme(sj)) graph_export(sdid_li, .eps)
+restore
+*medium low_intensity *****************************************************************
+preserve
+drop if ind_inc_deflated==.
+drop if sdid_mediumlow==.
+egen totalyear = count(year), by(pidp)
+keep if totalyear== 11
+xtset pidp final_reindex
+sdid ind_inc_deflated pidp final_reindex sdid_mediumlow, vce(bootstrap) seed(1213) covariates(male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize)  graph g1on g2_opt(ylabel(0(25)150) ytitle("Individual Income") scheme(sj)) g1_opt(xtitle("") scheme(sj)) graph_export(sdid_mli, .eps)
+restore
+*medium high_intensity *****************************************************************
+preserve
+drop if ind_inc_deflated==.
+drop if sdid_mediumhigh==.
+egen totalyear = count(year), by(pidp)
+keep if totalyear== 11
+xtset pidp final_reindex
+sdid ind_inc_deflated pidp final_reindex sdid_mediumhigh, vce(bootstrap) seed(1213) covariates(male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize)  graph g1on g2_opt(ylabel(0(25)150) ytitle("Individual Income") scheme(sj)) g1_opt(xtitle("") scheme(sj)) graph_export(sdid_mhi, .eps)
+restore
+*high intensity *****************************************************************
+ preserve
+drop if ind_inc_deflated==.
+drop if sdid_high==.
+egen totalyear = count(year), by(pidp)
+keep if totalyear== 11
+xtset pidp final_reindex
+sdid ind_inc_deflated pidp final_reindex sdid_high, vce(bootstrap) seed(1213) covariates(male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize)  graph g1on g2_opt(ylabel(0(25)150) ytitle("Individual Income") scheme(sj)) g1_opt(xtitle("") scheme(sj)) graph_export(sdid_hi, .eps)
+restore
+log close
+
+cd"C:\Users\if1mp\Desktop\project2\sdid"
+graph use ii_hi.gph, name(graph1)
+graph use ii_mhi.gph, name(graph2)
+graph use ii_mli.gph, name(graph3)
+graph use ii_li.gph, name(graph4)
+
+ grc1leg  graph1 graph2 graph3 graph4, xcommon scale(0.8) legendfrom(graph1) graphregion(fcolor(white))
