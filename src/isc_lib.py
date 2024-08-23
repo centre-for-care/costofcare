@@ -206,4 +206,3 @@ def isc(data_objects: list,
             'w_synths': w_synths,
             'boots_vars': boots_vars,
             'placebo_avs' : placebo_avs}
-

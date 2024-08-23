@@ -496,7 +496,7 @@ def isc_data_preparation(data, conditions: dict):
     treated = out[out.ever_treated].copy()
     control = out[~out.ever_treated].copy()
     control['ever_treated'] = control.groupby('pidp')['treated'].transform(any)
-    treated = treated[~(treated.years_treated < min_treat_waves)]
+    treated = treated[~(treated.consecutive_treatments < min_treat_waves)]
     treated = treated.drop(treated[(treated.year_treat_reindex < min_waves_pretreat)].index)
     return treated, control
 
@@ -554,3 +554,15 @@ def get_control_clean(c_data, t_data, features, target_var, weights=None):
         out['weight'] = t_data[t_data.pidp == t_id][['year', weights]].set_index('year')
         samples.append(out)
     return samples
+
+def max_consecutive_treatments(group):
+    year_treated = group['year_treated'].iloc[0]
+    to_count = group[group['year'] >= year_treated]
+    to_count = to_count.sort_values(by='year')
+    count = 0
+    for row in to_count.treated:
+        if row:
+            count += 1
+        else:
+            break
+    return [count] * len(group)  
