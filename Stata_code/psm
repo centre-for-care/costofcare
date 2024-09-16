@@ -1,0 +1,218 @@
+ Set the current working directory where the .dta file is located
+* Make sure to replace the path below with the actual directory on your machine
+cd "/Users/zhangyanan/Downloads"
+
+* Load the Stata dataset
+use "generated_new.dta", clear
+
+gen index_new3=year-first_treat
+
+
+
+foreach x of num 0 1 2 3 4 5 6 7 8 {
+	
+gen treat`x'=.
+replace treat`x'=1 if index_new3==`x'
+replace treat`x'=0 if control==1
+
+}
+
+
+
+
+*low intensity
+gen index_new_low=year-first_low_intensity_ok
+
+foreach x of num 0 1 2 3 4 5 6 {
+	
+gen treat`x'_low=.
+replace treat`x'_low=1 if index_new_low==`x'
+replace treat`x'_low=0 if control==1
+
+}
+
+*medium low intensity
+
+gen index_new_low_med=year-first_medium_low_intensity_ok
+
+
+foreach x of num 0 1 2 3 4 5 6{
+	
+gen treat`x'_low_med=.
+replace treat`x'_low_med=1 if index_new_low_med==`x'
+replace treat`x'_low_med=0 if control==1
+
+}
+
+**medium high_intensity
+gen index_new_med_high=year-first_medium_high_intensity_ok
+
+
+foreach x of num 0 1 2 3 4 5 6{
+	
+gen treat`x'_med_high=.
+replace treat`x'_med_high=1 if index_new_med_high==`x'
+replace treat`x'_med_high=0 if control==1
+
+}
+
+
+**high_intensity
+gen index_new_high=year-first_high_intensity_ok
+
+
+foreach x of num 0 1 2 3 4 5 6{
+	
+gen treat`x'_high=.
+replace treat`x'_high=1 if index_new_high==`x'
+replace treat`x'_high=0 if control==1
+
+}
+
+log using costofcare, replace
+**individual spending
+**overall
+foreach x of num 0 1 2 3 4 5 6{
+
+psmatch2 treat`x' male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(ind_inc_deflated) common neighbor(1) ate caliper(0.01)
+pstest male dvage married asian black mixed white intermediate_education advanced_education employed_d hhsize i.year, graph
+gen delta = ind_inc_deflated - _ind_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+}
+
+*low 
+foreach x of num 0 1 2 3 4 5 6 {
+
+
+psmatch2 treat`x'_low male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(ind_inc_deflated) common neighbor(1) ate caliper(0.01)
+*balanced test
+
+pstest male dvage married asian black mixed white intermediate_education advanced_education employed_d hhsize i.year, graph
+* a sensitivity analysis to assess how robust the treatment effect is to unobserved confounding or hidden bias
+
+gen delta = ind_inc_deflated - _ind_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+}
+*medium low
+foreach x of num 0 1 2 3 4 5 6 {
+
+
+psmatch2 treat`x'_low_med male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(ind_inc_deflated) common neighbor(1) ate caliper(0.01)
+
+*balanced test
+pstest male dvage married asian black mixed white intermediate_education advanced_education employed_d hhsize i.year, graph
+
+* a sensitivity analysis to assess how robust the treatment effect is to unobserved confounding or hidden bias
+gen delta = ind_inc_deflated - _ind_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+}
+
+*medium high
+foreach x of num 0 1 2 3 4 5 6 {
+	
+psmatch2 treat`x'_med_high male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(ind_inc_deflated) common neighbor(1) ate caliper(0.01)
+pstest male dvage married asian black mixed white intermediate_education advanced_education employed_d hhsize i.year, graph
+gen delta = ind_inc_deflated - _ind_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+}
+
+* high
+foreach x of num 0 1 2 3 4 5 6 {
+
+psmatch2 treat`x'_high male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(ind_inc_deflated) common neighbor(1) ate caliper(0.01)
+
+
+pstest male dvage married asian black mixed white intermediate_education advanced_education employed_d hhsize, graph
+gen delta = ind_inc_deflated - _ind_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+}
+
+
+**household spending
+
+
+**overall
+foreach x of num 0 1 2 3 4 5 6 {
+
+psmatch2 treat`x' male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(hh_inc_deflated) common neighbor(1) ate caliper(0.01)
+
+
+pstest male dvage married asian black mixed white intermediate_education advanced_education employed_d hhsize i.year, graph
+gen delta = hh_inc_deflated - _hh_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+}
+
+*low 
+foreach x of num 0 1 2 3 4 5 6{
+
+
+psmatch2 treat`x'_low male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(hh_inc_deflated) common neighbor(1) ate caliper(0.01)
+
+pstest male dvage married asian black mixed white intermediate_education advanced_education employed_d hhsize i.year, graph
+gen delta = hh_inc_deflated - _hh_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+}
+*medium low
+foreach x of num 0 1 2 3 4 5 6{
+
+
+psmatch2 treat`x'_low_med male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(hh_inc_deflated) common neighbor(1) ate caliper(0.01)
+
+pstest male dvage married asian black mixed white intermediate_education advanced_education employed_d hhsize i.year, graph
+gen delta = hh_inc_deflated - _hh_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+
+}
+
+*medium high
+foreach x of num 0 1 2 3 4 5 6{
+	
+psmatch2 treat`x'_med_high male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(hh_inc_deflated) common neighbor(1) ate caliper(0.01)
+
+pstest male dvage married  black mixed white intermediate_education advanced_education employed_d hhsize i.year, graph
+gen delta = hh_inc_deflated - _hh_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+
+}
+
+* high
+foreach x of num 0 1 2 3 4 5 6{
+
+psmatch2 treat`x'_high male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize i.year, out(hh_inc_deflated) common neighbor(1) ate caliper(0.01)
+
+pstest male dvage married asian black mixed white intermediate_education advanced_education employed_d hhsize i.year, graph
+gen delta = hh_inc_deflated - _hh_inc_deflated if _treat==1 & _support==1
+rbounds delta, gamma(1.1)
+rbounds delta, gamma(1.2)
+rbounds delta, gamma(1.3)
+drop  delta
+
+}
+log close
