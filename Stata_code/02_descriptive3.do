@@ -42,16 +42,16 @@ graph twoway  line  level1 level2 level3 level4 ctr_all dvage, ///
   xtitle(Age) ytitle(Individual Income) legend( label(1 " Low Intensity") label(2 "Medium-Low Intensity") label(3 "Medium-High Intensity") label(4 "High-Intensity") label(5 "Control")) graphregion(color(white)) saving(level_intensity2) sort
 
 *Table 1 : Descriptive statistics.
-global list0 ind_inc_deflated hh_inc_deflated inc_share employed_d dvage male married  asian black white other_mixed hhsize lower_education intermediate_education advanced_education 
+global list0 ind_inc_deflated hh_inc_deflated inc_share employed_d dvage male married  asian black white mixed other hhsize lower_education intermediate_education advanced_education 
 eststo drop *
 eststo: estpost summarize $list0 if care_intensity_t==0 [aw=weight_yearx]
 eststo: estpost summarize $list0 if care_intensity_t==1 [aw=weight_yearx]
 eststo: estpost summarize $list0 if care_intensity_t==2 [aw=weight_yearx]
 eststo: estpost summarize $list0 if care_intensity_t==3 [aw=weight_yearx]
 eststo: estpost summarize $list0 if treated_ok==0 [aw=weight_yearx]
-esttab using summary.rtf, cells("mean(fmt(2))sd(fmt(2)) ")   wide nodepvar  title({\b Table 2.} {\i Descriptive statistics treatment vs control group }) compress replace 
-esttab using summary1.rtf, cells("mean(fmt(2))")   label wide nodepvar  title({\b Table 2.} {\i Descriptive statistics treatment vs control group }) compress replace 
-
+esttab using summary2_panel.rtf, cells("mean(fmt(2))")   label wide nodepvar noobs title({\b Table 2.} {\i Descriptive statistics treatment vs control group }) compress replace 
+bysort care_intensity_t: distinct pidp
+bysort treated_ok: distinct pidp
 
 
 
