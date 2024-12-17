@@ -24,7 +24,7 @@ xtset pidp year
 *keep if reindex>=-5
 *drop if reindex>5
 
-log using did_test_ind
+
  *****INDIVIDUAL INCOME
   *low_intensity *****************************************************************
  csdid ind_inc_deflated male dvage married asian black mixed  white  intermediate_education advanced_education employed_d hhsize [weight=weight_yearx], ivar(pidp) time(year) gvar(first_low_intensity_ok) method(drimp )
@@ -52,9 +52,9 @@ estat pretrend
 
 
  grc1leg  m4 m3 m2 m1, xcommon scale(0.8) legendfrom(m1) graphregion(fcolor(white))
-log close
 
-log using did_test_hh
+
+
  
  ****HOUSEHOLD INCOME
    *low_intensity ***************************************************************** 
@@ -83,24 +83,7 @@ estat pretrend
  esttab event5 event6 event7 event8 using hh_est.rtf, replace nogaps
  
 
- log close
- 
- 
-*  csdid ind_inc_deflated dvage married asian black mixed  white  intermediate_education advanced_education weight_yearx, ivar(pidp) time(year) gvar(first_treat) method(drimp ) saverif(rif_example)   replace 
-  *use rif_example
-  
-*estimate att by event, group or cohorts  
-estat pretrend
-estat all
-estat simple
-estat calendar
-estat group 
-estat event
-*csdid_stats simple 
-*csdid_stats calendar
-*csdid_stats group
-*csdid_stats event
 
-*** if similiar graphs to isc are needed: 
-*The CSDID plot can be done via -coefplot-
-*smoothed lines can be done using vc_reg and vc_graph (ssc install vc_reg). Also look from -event_plot-
+ 
+ 
+
